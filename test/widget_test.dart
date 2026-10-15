@@ -1,30 +1,33 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:omni_warehouse_mob/main.dart';
+import 'package:omni_warehouse_mob/features/auth/home_screen.dart';
+import 'package:omni_warehouse_mob/features/auth/login_step1_screen.dart';
+import 'package:omni_warehouse_mob/features/auth/login_step2_screen.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('home screen shows intro and CTA', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('OmniWarehouse Ecosystem'), findsOneWidget);
+    expect(find.text('Aplikasi Handheld WMS'), findsOneWidget);
+    expect(find.text('Masuk dengan Akun Operator'), findsOneWidget);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('tenant screen shows tenant form fields', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: LoginStep1Screen()));
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Login Operator Gudang'), findsOneWidget);
+    expect(find.text('Workspace Tenant ID'), findsOneWidget);
+    expect(find.text('Verify Tenant'), findsOneWidget);
+  });
+
+  testWidgets('credentials screen shows login fields', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: LoginStep2Screen()));
+
+    expect(find.text('Login Operator Gudang'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Masuk ke Dashboard Demo'), findsOneWidget);
   });
 }

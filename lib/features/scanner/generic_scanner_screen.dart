@@ -10,7 +10,7 @@ class GenericScannerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF020617), // slate-950
+      backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
         child: Center(
           child: Container(
@@ -28,14 +28,14 @@ class GenericScannerScreen extends StatelessWidget {
                         Icon(
                           Icons.qr_code_scanner_rounded,
                           color: AppColors.primary,
-                          size: 20,
+                          size: 22,
                         ),
                         SizedBox(width: 8),
                         Text(
-                          'GENERIC SCANNER • MOBILE_SCANNER',
+                          'GENERIC SCANNER • WMS',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
+                            color: AppColors.textPrimary,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                             fontFamily: 'RobotoMono',
                             letterSpacing: 0.8,
@@ -49,13 +49,13 @@ class GenericScannerScreen extends StatelessWidget {
                       child: Container(
                         width: 36,
                         height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.12),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE2E8F0),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.close_rounded,
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           size: 18,
                         ),
                       ),
@@ -63,10 +63,25 @@ class GenericScannerScreen extends StatelessWidget {
                   ],
                 ),
 
-                // Center Reticle
-                const OmniScannerOverlay(
-                  instruction: 'Arahkan kamera ke Barcode / QR item',
-                  boxSize: 280,
+                // Center Reticle Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const OmniScannerOverlay(
+                    instruction: 'Arahkan kamera ke Barcode / QR item',
+                    boxSize: 260,
+                  ),
                 ),
 
                 // Simulation Trigger Actions
@@ -115,9 +130,9 @@ class GenericScannerScreen extends StatelessWidget {
                           context.go('/outbound/SO-2025-1102');
                         },
                         style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.white.withValues(alpha: 0.08),
-                          foregroundColor: Colors.white,
-                          side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primaryBorder),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -126,7 +141,7 @@ class GenericScannerScreen extends StatelessWidget {
                           'Simulasi Scan SO-2025-1102',
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                             fontFamily: 'RobotoMono',
                           ),
                         ),

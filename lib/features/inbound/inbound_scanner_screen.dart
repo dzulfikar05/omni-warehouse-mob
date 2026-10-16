@@ -339,7 +339,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B132B), // Tactical dark viewport
+      backgroundColor: const Color(0xFFF1F5F9), // Clean light slate-100
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
         child: Container(
@@ -350,14 +350,14 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
             bottom: 8,
           ),
           decoration: const BoxDecoration(
-            color: Color(0xFF0F172A),
-            border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: AppColors.border)),
           ),
           child: Row(
             children: [
               IconButton(
                 onPressed: () => context.go('/inbound'),
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary, size: 20),
               ),
               const SizedBox(width: 4),
               Expanded(
@@ -373,7 +373,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
                             fontFamily: 'RobotoMono',
-                            color: Colors.white,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -399,7 +399,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                       manifest.supplier,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                     ),
                   ],
                 ),
@@ -416,7 +416,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                 },
                 icon: Icon(
                   _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                  color: _isFlashOn ? const Color(0xFFFACC15) : Colors.white70,
+                  color: _isFlashOn ? const Color(0xFFFACC15) : AppColors.textSecondary,
                   size: 20,
                 ),
               ),
@@ -427,7 +427,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                 },
                 icon: Icon(
                   _isAudioBeepOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                  color: _isAudioBeepOn ? const Color(0xFF38BDF8) : Colors.white70,
+                  color: _isAudioBeepOn ? AppColors.primary : AppColors.textSecondary,
                   size: 20,
                 ),
               ),
@@ -443,10 +443,13 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
               // Overall Progress Strip
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: const Color(0xFF1E293B),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF8FAFC),
+                  border: Border(bottom: BorderSide(color: AppColors.border)),
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.assignment_turned_in_rounded, size: 16, color: Color(0xFF38BDF8)),
+                    const Icon(Icons.assignment_turned_in_rounded, size: 16, color: AppColors.primary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
@@ -457,7 +460,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                             children: [
                               const Text(
                                 'Progres Validasi Koli',
-                                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
+                                style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                               ),
                               Text(
                                 '${manifest.scannedUnits} / ${manifest.totalUnits} Units (${(manifest.progressPercentage * 100).toInt()}%)',
@@ -465,7 +468,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                                   fontSize: 11,
                                   fontFamily: 'RobotoMono',
                                   fontWeight: FontWeight.w700,
-                                  color: Colors.white,
+                                  color: AppColors.primary,
                                 ),
                               ),
                             ],
@@ -476,9 +479,9 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                             child: LinearProgressIndicator(
                               value: manifest.progressPercentage,
                               minHeight: 5,
-                              backgroundColor: const Color(0xFF334155),
+                              backgroundColor: const Color(0xFFE2E8F0),
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                manifest.isFullyCompleted ? AppColors.success : const Color(0xFF38BDF8),
+                                manifest.isFullyCompleted ? AppColors.success : AppColors.primary,
                               ),
                             ),
                           ),
@@ -506,13 +509,13 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                       ),
                     ),
 
-                    // Tactical Reticle Box
+                    // Reticle Box
                     Container(
                       width: 240,
                       height: 160,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.5), width: 1.5),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.5), width: 1.5),
                       ),
                       child: Stack(
                         children: [
@@ -525,8 +528,8 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                               height: 22,
                               decoration: const BoxDecoration(
                                 border: Border(
-                                  top: BorderSide(color: Color(0xFF38BDF8), width: 3.5),
-                                  left: BorderSide(color: Color(0xFF38BDF8), width: 3.5),
+                                  top: BorderSide(color: AppColors.primary, width: 3.5),
+                                  left: BorderSide(color: AppColors.primary, width: 3.5),
                                 ),
                               ),
                             ),
@@ -539,8 +542,8 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                               height: 22,
                               decoration: const BoxDecoration(
                                 border: Border(
-                                  top: BorderSide(color: Color(0xFF38BDF8), width: 3.5),
-                                  right: BorderSide(color: Color(0xFF38BDF8), width: 3.5),
+                                  top: BorderSide(color: AppColors.primary, width: 3.5),
+                                  right: BorderSide(color: AppColors.primary, width: 3.5),
                                 ),
                               ),
                             ),
@@ -553,8 +556,8 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                               height: 22,
                               decoration: const BoxDecoration(
                                 border: Border(
-                                  bottom: BorderSide(color: Color(0xFF38BDF8), width: 3.5),
-                                  left: BorderSide(color: Color(0xFF38BDF8), width: 3.5),
+                                  bottom: BorderSide(color: AppColors.primary, width: 3.5),
+                                  left: BorderSide(color: AppColors.primary, width: 3.5),
                                 ),
                               ),
                             ),
@@ -567,14 +570,14 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                               height: 22,
                               decoration: const BoxDecoration(
                                 border: Border(
-                                  bottom: BorderSide(color: Color(0xFF38BDF8), width: 3.5),
-                                  right: BorderSide(color: Color(0xFF38BDF8), width: 3.5),
+                                  bottom: BorderSide(color: AppColors.primary, width: 3.5),
+                                  right: BorderSide(color: AppColors.primary, width: 3.5),
                                 ),
                               ),
                             ),
                           ),
 
-                          // Animated Sweeping Laser Line
+                          // Animated Sweeping Laser Line (Blue Laser)
                           AnimatedBuilder(
                             animation: _laserAnimation,
                             builder: (context, child) {
@@ -584,11 +587,11 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                                 right: 6,
                                 child: Container(
                                   height: 2,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEF4444),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF60A5FA),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFFEF4444).withValues(alpha: 0.8),
+                                        color: Color(0xFF60A5FA),
                                         blurRadius: 8,
                                         spreadRadius: 1,
                                       ),
@@ -617,19 +620,19 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
+                          color: Colors.white.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.white24),
+                          border: Border.all(color: AppColors.primaryBorder),
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.camera_alt_outlined, size: 12, color: Color(0xFF38BDF8)),
+                            Icon(Icons.camera_alt_outlined, size: 12, color: AppColors.primary),
                             SizedBox(width: 6),
                             Text(
                               'AUTO-FOCUS READY',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.primary,
                                 fontSize: 10,
                                 fontFamily: 'RobotoMono',
                                 fontWeight: FontWeight.w700,
@@ -647,12 +650,13 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A).withValues(alpha: 0.85),
+                          color: Colors.white.withValues(alpha: 0.92),
                           borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: AppColors.border),
                         ),
                         child: const Text(
                           'Arahkan kamera ke Barcode Koli / SKU',
-                          style: TextStyle(fontSize: 11, color: Color(0xFFE2E8F0)),
+                          style: TextStyle(fontSize: 11, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
                         ),
                       ),
                     ),
@@ -672,7 +676,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                                 fontSize: 9,
                                 fontFamily: 'RobotoMono',
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF64748B),
+                                color: Colors.white70,
                               ),
                             ),
                             const SizedBox(width: 6),
@@ -684,9 +688,9 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   margin: const EdgeInsets.only(right: 6),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF1E293B),
+                                    color: Colors.white,
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFF38BDF8)),
+                                    border: Border.all(color: AppColors.primaryBorder),
                                   ),
                                   child: Text(
                                     item.sku,
@@ -694,7 +698,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                                       fontSize: 10,
                                       fontFamily: 'RobotoMono',
                                       fontWeight: FontWeight.w700,
-                                      color: Color(0xFF38BDF8),
+                                      color: AppColors.primary,
                                     ),
                                   ),
                                 ),
@@ -706,9 +710,9 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1E293B),
+                                  color: Colors.white,
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFFF59E0B)),
+                                  border: Border.all(color: AppColors.primaryBorder),
                                 ),
                                 child: const Text(
                                   'Rak A1-02',
@@ -716,7 +720,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
                                     fontSize: 10,
                                     fontFamily: 'RobotoMono',
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFFF59E0B),
+                                    color: AppColors.primary,
                                   ),
                                 ),
                               ),

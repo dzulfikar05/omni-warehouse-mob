@@ -11,6 +11,7 @@ import '../../features/outbound/outbound_list_screen.dart';
 import '../../features/outbound/outbound_scanner_screen.dart';
 import '../../features/stock_transfer/transfer_list_screen.dart';
 import '../../features/stock_transfer/transfer_form_screen.dart';
+import '../../features/stock_transfer/transfer_scanner_screen.dart';
 import '../../features/stock_opname/opname_list_screen.dart';
 import '../../features/stock_opname/opname_scanner_screen.dart';
 import '../../features/scanner/generic_scanner_screen.dart';
@@ -107,6 +108,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'form',
                     builder: (context, state) => const TransferFormScreen(),
+                  ),
+                  GoRoute(
+                    path: 'scan',
+                    builder: (context, state) => const TransferScannerScreen(),
                   ),
                 ],
               ),

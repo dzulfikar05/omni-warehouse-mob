@@ -96,13 +96,13 @@ class _OmniScannerOverlayState extends State<OmniScannerOverlay>
                       gradient: const LinearGradient(
                         colors: [
                           Colors.transparent,
-                          Color(0xFFEF4444),
+                          Color(0xFF60A5FA),
                           Colors.transparent,
                         ],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFEF4444).withValues(alpha: 0.8),
+                          color: const Color(0xFF3B82F6).withValues(alpha: 0.8),
                           blurRadius: 10,
                           spreadRadius: 1,
                         ),

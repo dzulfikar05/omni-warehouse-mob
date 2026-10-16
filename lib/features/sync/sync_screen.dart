@@ -247,14 +247,15 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
               constraints: const BoxConstraints(maxHeight: 280),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
               ),
               child: SingleChildScrollView(
                 child: SelectableText(
                   prettyJson,
                   style: const TextStyle(
-                    color: Color(0xFF93C5FD),
+                    color: Color(0xFF1E40AF),
                     fontFamily: 'RobotoMono',
                     fontSize: 11,
                     height: 1.4,

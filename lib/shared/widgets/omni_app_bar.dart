@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../features/notifications/notification_repository.dart';
 
 class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
   const OmniAppBar({
@@ -23,6 +24,7 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
     final initials = _getInitials(auth.userName ?? 'Budi Santoso');
+    final unreadNotifs = ref.watch(notificationProvider).unreadCount;
 
     return SafeArea(
       bottom: false,
@@ -91,62 +93,107 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                   ),
                 ),
 
-                // Right: Status Dot + Profile Avatar Capsule
-                InkWell(
-                  onTap: onProfileTap ?? () => context.go('/more/profile'),
-                  borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceAlt,
+                // Right: Notifications Bell + Status Dot & Profile Capsule
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Modern Bell Button with Unread Indicator
+                    InkWell(
+                      onTap: () => context.push('/notifications'),
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: AppColors.border, width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Live Network Status Dot
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isOnline
-                                ? AppColors.success
-                                : AppColors.danger,
-                            border: Border.all(
-                              color: isOnline
-                                  ? const Color(0xFFD1FAE5)
-                                  : const Color(0xFFFFE4E6),
-                              width: 2,
-                            ),
-                          ),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceAlt,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.border, width: 1),
                         ),
-                        const SizedBox(width: 8),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            const Icon(
+                              Icons.notifications_outlined,
+                              size: 20,
+                              color: AppColors.textPrimary,
+                            ),
+                            if (unreadNotifs > 0)
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
 
-                        // Initials Avatar Circle
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.primary,
-                          ),
-                          child: Center(
-                            child: Text(
-                              initials,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'RobotoMono',
+                    // Status Dot + Profile Avatar Capsule
+                    InkWell(
+                      onTap: onProfileTap ?? () => context.go('/more/profile'),
+                      borderRadius: BorderRadius.circular(999),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceAlt,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: AppColors.border, width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Live Network Status Dot
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isOnline
+                                    ? AppColors.success
+                                    : AppColors.danger,
+                                border: Border.all(
+                                  color: isOnline
+                                      ? const Color(0xFFD1FAE5)
+                                      : const Color(0xFFFFE4E6),
+                                  width: 2,
+                                ),
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+
+                            // Initials Avatar Circle
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.primary,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  initials,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    fontFamily: 'RobotoMono',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),

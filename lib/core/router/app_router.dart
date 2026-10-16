@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../shared/widgets/omni_bottom_nav.dart';
@@ -18,26 +19,67 @@ import '../../features/scanner/generic_scanner_screen.dart';
 import '../../features/sync/sync_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/profile/edit_profile_screen.dart';
+import '../../features/splash/splash_screen.dart';
+import '../../features/notifications/notifications_screen.dart';
 import '../auth/auth_provider.dart';
+
+CustomTransitionPage<void> _buildFadePage({
+  required LocalKey key,
+  required Widget child,
+  Duration duration = const Duration(milliseconds: 550),
+}) {
+  return CustomTransitionPage<void>(
+    key: key,
+    child: child,
+    transitionDuration: duration,
+    reverseTransitionDuration: duration,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeInOutCubic,
+        ),
+        child: child,
+      );
+    },
+  );
+}
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
   return GoRouter(
-    initialLocation: authState.isAuthenticated ? '/dashboard' : '/home',
+    initialLocation: authState.isAuthenticated ? '/dashboard' : '/splash',
     redirect: (context, state) {
       final isAuth = authState.isAuthenticated;
+      final isSplash = state.matchedLocation == '/splash';
       final isOnAuthRoute =
           state.matchedLocation.startsWith('/home') ||
-          state.matchedLocation.startsWith('/login');
+          state.matchedLocation.startsWith('/login') ||
+          isSplash;
 
-      if (!isAuth && !isOnAuthRoute) return '/home';
-      if (isAuth && isOnAuthRoute) return '/dashboard';
+      if (!isAuth && !isOnAuthRoute) return '/splash';
+      if (isAuth && (state.matchedLocation == '/home' || state.matchedLocation.startsWith('/login'))) return '/dashboard';
       return null;
     },
     routes: [
-      // Auth
-      GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+      // Splash dengan fade page
+      GoRoute(
+        path: '/splash',
+        pageBuilder: (context, state) => _buildFadePage(
+          key: state.pageKey,
+          child: const SplashScreen(),
+        ),
+      ),
+
+      // Auth dengan fade page
+      GoRoute(
+        path: '/home',
+        pageBuilder: (context, state) => _buildFadePage(
+          key: state.pageKey,
+          child: const HomeScreen(),
+        ),
+      ),
       GoRoute(
         path: '/login/tenant',
         builder: (context, state) => const LoginStep1Screen(),
@@ -45,6 +87,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login/credentials',
         builder: (context, state) => const LoginStep2Screen(),
+      ),
+      GoRoute(
+        path: '/notifications',
+        pageBuilder: (context, state) => _buildFadePage(
+          key: state.pageKey,
+          child: const NotificationsScreen(),
+        ),
       ),
 
       // Main shell dengan bottom nav

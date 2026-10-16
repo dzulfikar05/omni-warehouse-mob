@@ -30,12 +30,13 @@ class _FeatureMenuSheet extends ConsumerWidget {
     final auth = ref.watch(authProvider);
     final tenantName = auth.tenantName ?? 'Gudang Malang (Hub Jatim)';
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Drag handle
           Center(
             child: Container(
@@ -215,6 +216,18 @@ class _FeatureMenuSheet extends ConsumerWidget {
               variant: OmniBadgeVariant.warning,
             ),
           ),
+          const SizedBox(height: 8),
+
+          _buildFeatureTile(
+            context,
+            icon: Icons.notifications_outlined,
+            iconColor: AppColors.primary,
+            iconBg: AppColors.primaryLight,
+            iconBorder: AppColors.primaryBorder,
+            title: 'Notifikasi Operasional',
+            subtitle: 'Pemberitahuan tugas & kedatangan kontainer',
+            route: '/notifications',
+          ),
           const SizedBox(height: 16),
 
           // Quick Profile Button in Sheet
@@ -240,8 +253,9 @@ class _FeatureMenuSheet extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildFeatureTile(
     BuildContext context, {

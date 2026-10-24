@@ -9,19 +9,27 @@ import 'package:omni_warehouse_mob/features/stock_opname/opname_scanner_screen.d
 
 void main() {
   group('OpnameNotifier & State Management', () {
-    test('initial state has active sessions and calculates stats correctly', () {
+    test('initial state is clean and calculates stats correctly', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
       final sessions = container.read(opnameRepositoryProvider);
       final stats = container.read(opnameStatsProvider);
 
-      expect(sessions.isNotEmpty, true);
-      expect(stats.activeSessions, sessions.where((s) => s.status == OpnameSessionStatus.active).length);
+      expect(sessions.isEmpty, true);
+      expect(stats.activeSessions, 0);
+      expect(stats.totalItemsCounted, 0);
+      expect(stats.discrepancyCount, 0);
     });
 
     test('updateItemPhysicalCount updates physicalQty and calculates variance', () {
-      final container = ProviderContainer();
+      final container = ProviderContainer(
+        overrides: [
+          opnameRepositoryProvider.overrideWith(
+            (ref) => OpnameNotifier(List.from(OpnameNotifier.sampleSessions)),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(opnameRepositoryProvider.notifier);
@@ -43,7 +51,13 @@ void main() {
     });
 
     test('submitSessionForReconciliation marks session as reconciling', () {
-      final container = ProviderContainer();
+      final container = ProviderContainer(
+        overrides: [
+          opnameRepositoryProvider.overrideWith(
+            (ref) => OpnameNotifier(List.from(OpnameNotifier.sampleSessions)),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(opnameRepositoryProvider.notifier);
@@ -62,6 +76,11 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            opnameRepositoryProvider.overrideWith(
+              (ref) => OpnameNotifier(List.from(OpnameNotifier.sampleSessions)),
+            ),
+          ],
           child: MaterialApp(
             theme: buildAppTheme(),
             home: const OpnameListScreen(),
@@ -91,6 +110,11 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            opnameRepositoryProvider.overrideWith(
+              (ref) => OpnameNotifier(List.from(OpnameNotifier.sampleSessions)),
+            ),
+          ],
           child: MaterialApp(
             theme: buildAppTheme(),
             home: const OpnameListScreen(),
@@ -116,6 +140,11 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            opnameRepositoryProvider.overrideWith(
+              (ref) => OpnameNotifier(List.from(OpnameNotifier.sampleSessions)),
+            ),
+          ],
           child: MaterialApp(
             theme: buildAppTheme(),
             home: const OpnameScannerScreen(sessionCode: 'SOP-2026-1001'),

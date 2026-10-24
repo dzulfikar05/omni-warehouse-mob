@@ -34,10 +34,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void initState() {
     super.initState();
 
-    // Entrance: 2000ms smooth cubic entrance
+    // Entrance: 1400ms smooth cubic entrance
     _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 1400),
     );
 
     _logoScale = Tween<double>(begin: 0.75, end: 1.0).animate(
@@ -71,10 +71,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ),
     );
 
-    // Exit: 550ms butter-smooth fade and subtle camera zoom
+    // Exit: 400ms smooth fade
     _exitController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 550),
+      duration: const Duration(milliseconds: 400),
     );
 
     _exitFade = Tween<double>(begin: 1.0, end: 0.0).animate(
@@ -84,7 +84,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ),
     );
 
-    _exitScale = Tween<double>(begin: 1.0, end: 1.08).animate(
+    _exitScale = Tween<double>(begin: 1.0, end: 1.06).animate(
       CurvedAnimation(
         parent: _exitController,
         curve: Curves.easeOutCubic,
@@ -93,8 +93,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     _entranceController.forward();
 
-    // Durasi tayang 4.0 detik lalu keluar secara smooth otomatis
-    _autoNavTimer = Timer(const Duration(milliseconds: 4000), () {
+    // Durasi tayang 2.0 detik lalu keluar secara smooth otomatis
+    _autoNavTimer = Timer(const Duration(milliseconds: 2000), () {
       if (mounted && !_navigated) {
         _proceedToApp();
       }

@@ -440,7 +440,7 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
 
               // List of PO Cards
               if (filteredManifests.isEmpty)
-                _buildEmptyState()
+                _buildEmptyState(hasAnyManifests: manifests.isNotEmpty)
               else
                 ...filteredManifests.map((manifest) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -488,26 +488,30 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Menu Inbound',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Menu Inbound',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 1),
-                  Text(
-                    'Penerimaan & Validasi Fisik Barang Masuk',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+                    SizedBox(height: 1),
+                    Text(
+                      'Penerimaan & Validasi Fisik Barang Masuk',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -930,7 +934,98 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({required bool hasAnyManifests}) {
+    if (!hasAnyManifests) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.primaryBorder),
+              ),
+              child: const Icon(
+                Icons.inventory_2_outlined,
+                size: 30,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Belum Ada Manifes Inbound',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Daftar manifes bersih. Mulai proses dengan scan Surat Jalan dari supplier atau buat tiket penerimaan ad-hoc.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/scanner'),
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 16),
+                  label: const Text('Scan Surat Jalan'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _showAdhocInboundDialog,
+                  icon: const Icon(Icons.add_rounded, size: 16),
+                  label: const Text('+ Ad-hoc'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primaryBorder),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
@@ -940,7 +1035,7 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.inbox_rounded, size: 48, color: AppColors.textMuted),
+          const Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted),
           const SizedBox(height: 12),
           const Text(
             'Tidak Ada Manifes Inbound Ditemukan',

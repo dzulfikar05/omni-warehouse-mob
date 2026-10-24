@@ -583,6 +583,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   void _showNotificationSettingsSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -594,7 +595,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             final notifier = ref.read(notificationProvider.notifier);
 
             return SafeArea(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

@@ -9,17 +9,17 @@ import 'package:omni_warehouse_mob/features/stock_transfer/transfer_repository.d
 
 void main() {
   group('TransferNotifier & State Management', () {
-    test('initial state has default mock transfers and correct stats', () {
+    test('initial state is clean and calculates stats correctly', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
       final items = container.read(transferRepositoryProvider);
       final stats = container.read(transferStatsProvider);
 
-      expect(items.isNotEmpty, true);
-      expect(stats.todayTotal, items.length);
-      expect(stats.completed, items.where((t) => t.status == TransferStatus.completed).length);
-      expect(stats.inTransit, items.where((t) => t.status == TransferStatus.inTransit).length);
+      expect(items.isEmpty, true);
+      expect(stats.todayTotal, 0);
+      expect(stats.completed, 0);
+      expect(stats.inTransit, 0);
     });
 
     test('addTransfer adds item to top and updates stats', () {
@@ -54,7 +54,13 @@ void main() {
     });
 
     test('updateTransferStatus changes status correctly', () {
-      final container = ProviderContainer();
+      final container = ProviderContainer(
+        overrides: [
+          transferRepositoryProvider.overrideWith(
+            (ref) => TransferNotifier(List.from(TransferNotifier.sampleTransfers)),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(transferRepositoryProvider.notifier);
@@ -78,6 +84,11 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            transferRepositoryProvider.overrideWith(
+              (ref) => TransferNotifier(List.from(TransferNotifier.sampleTransfers)),
+            ),
+          ],
           child: MaterialApp(
             theme: buildAppTheme(),
             home: const TransferListScreen(),
@@ -113,6 +124,11 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            transferRepositoryProvider.overrideWith(
+              (ref) => TransferNotifier(List.from(TransferNotifier.sampleTransfers)),
+            ),
+          ],
           child: MaterialApp(
             theme: buildAppTheme(),
             home: const TransferListScreen(),

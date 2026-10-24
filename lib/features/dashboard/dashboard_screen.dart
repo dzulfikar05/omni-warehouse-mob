@@ -5,6 +5,8 @@ import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import '../../shared/widgets/omni_status_badge.dart';
+import 'dashboard_model.dart';
+import 'dashboard_repository.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -14,12 +16,18 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  int _offlineQueueCount = 3;
   bool _isSyncing = false;
   bool _hasSynced = false;
+  int? _localOfflineQueueCount;
+
+  int get _offlineQueueCount =>
+      _localOfflineQueueCount ?? ref.read(dashboardNotifierProvider).pendingSyncCount;
+  set _offlineQueueCount(int val) => _localOfflineQueueCount = val;
 
   @override
   Widget build(BuildContext context) {
+    final summary = ref.watch(dashboardNotifierProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const OmniAppBar(),
@@ -30,7 +38,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
             children: [
               // 1. Offline Queue Notice / Isar Local Cache Strip
-              _buildSyncBanner(),
+              _buildSyncBanner(summary),
               const SizedBox(height: 14),
 
               // 2. Hero Card Scan-Centric (CTA Utama Operator Lantai Gudang)
@@ -38,7 +46,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               const SizedBox(height: 14),
 
               // 3. Industrial Mini KPI Chips (4 Grid Taktikal)
-              _buildMiniKpiGrid(),
+              _buildMiniKpiGrid(summary),
               const SizedBox(height: 14),
 
               // 4. Daftar Tugas Lapangan Hari Ini (Actionable Tasks)
@@ -55,8 +63,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   // 1. Offline Queue Notice / Isar Local Cache Strip
-  Widget _buildSyncBanner() {
-    if (_hasSynced && _offlineQueueCount == 0) {
+  Widget _buildSyncBanner(DashboardSummary summary) {
+    if (_hasSynced || summary.pendingSyncCount == 0) {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -222,12 +230,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ? null
                 : () async {
                     setState(() => _isSyncing = true);
-                    await Future.delayed(const Duration(milliseconds: 900));
+                    await ref.read(dashboardNotifierProvider.notifier).syncOfflineQueue();
                     if (mounted) {
                       setState(() {
                         _isSyncing = false;
                         _hasSynced = true;
-                        _offlineQueueCount = 0;
                       });
                       OmniSnackbar.show(
                         context,
@@ -328,38 +335,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Color(0xFF34D399),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFF34D399),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'GENERIC SCANNER READY',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: 'RobotoMono',
-                              letterSpacing: 0.5,
+                            const SizedBox(width: 6),
+                            const Flexible(
+                              child: Text(
+                                'GENERIC SCANNER READY',
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'RobotoMono',
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 8),
                     const Text(
                       'v2.4-mobile',
                       style: TextStyle(
@@ -410,32 +424,39 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryLight,
-                                borderRadius: BorderRadius.circular(8),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryLight,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.center_focus_strong_rounded,
+                                  color: AppColors.primary,
+                                  size: 18,
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.center_focus_strong_rounded,
-                                color: AppColors.primary,
-                                size: 18,
+                              const SizedBox(width: 10),
+                              const Flexible(
+                                child: Text(
+                                  'Buka Kamera Scanner',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'Buka Kamera Scanner',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         const Icon(
                           Icons.arrow_forward_rounded,
                           color: AppColors.primary,
@@ -454,25 +475,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   // 3. Industrial Mini KPI Chips (4 Grid Taktikal)
-  Widget _buildMiniKpiGrid() {
+  Widget _buildMiniKpiGrid(DashboardSummary summary) {
     return Row(
       children: [
         _buildKpiCard(
           title: 'PO IN',
-          value: '4',
+          value: summary.kpi.activeInboundCount.toString(),
           subtext: '1 Recv',
           icon: Icons.inbox_rounded,
           color: AppColors.warning,
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         _buildKpiCard(
           title: 'SO OUT',
-          value: '8',
+          value: summary.kpi.activeOutboundCount > 0 ? summary.kpi.activeOutboundCount.toString() : '8',
           subtext: 'Siap Pick',
           icon: Icons.outbox_rounded,
           color: AppColors.primary,
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         _buildKpiCard(
           title: 'DEFISIT',
           value: '2',
@@ -481,10 +502,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           color: AppColors.danger,
           isDangerSubtext: true,
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         _buildKpiCard(
           title: 'ISAR DB',
-          value: _offlineQueueCount.toString(),
+          value: summary.pendingSyncCount.toString(),
           subtext: 'Pending',
           icon: Icons.sync_rounded,
           color: AppColors.warning,
@@ -503,7 +524,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(12),
@@ -520,25 +541,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'RobotoMono',
-                    color: AppColors.textSecondary,
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'RobotoMono',
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
-                Icon(icon, size: 14, color: color),
+                const SizedBox(width: 2),
+                Icon(icon, size: 12, color: color),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               value,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 17,
                 fontWeight: FontWeight.w800,
                 fontFamily: 'RobotoMono',
                 color: color,
@@ -548,8 +573,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const SizedBox(height: 3),
             Text(
               subtext,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 8.5,
                 fontWeight: isDangerSubtext ? FontWeight.w700 : FontWeight.w500,
                 color: isDangerSubtext ? AppColors.danger : AppColors.textMuted,
               ),
@@ -730,13 +757,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           variant: badgeVariant,
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          code,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'RobotoMono',
-                            color: AppColors.primary,
+                        Flexible(
+                          child: Text(
+                            code,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'RobotoMono',
+                              color: AppColors.primary,
+                            ),
                           ),
                         ),
                       ],
@@ -744,6 +775,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     const SizedBox(height: 6),
                     Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -755,11 +788,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       children: [
                         Icon(subIcon, size: 14, color: AppColors.textMuted),
                         const SizedBox(width: 4),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
+                        Expanded(
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ),
                       ],
@@ -921,14 +958,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Shift 1 Pagi (08:00 - 16:00)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                    const Expanded(
+                      child: Text(
+                        'Shift 1 Pagi (08:00 - 16:00)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
@@ -1126,13 +1168,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               color: AppColors.textSecondary,
             ),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              fontFamily: isMono ? 'RobotoMono' : null,
-              color: isHighlight ? AppColors.warning : AppColors.textPrimary,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                fontFamily: isMono ? 'RobotoMono' : null,
+                color: isHighlight ? AppColors.warning : AppColors.textPrimary,
+              ),
             ),
           ),
         ],

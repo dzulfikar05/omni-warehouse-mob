@@ -3,9 +3,10 @@ import '../../core/offline/sync_manager.dart';
 import 'opname_model.dart';
 
 class OpnameNotifier extends StateNotifier<List<OpnameSession>> {
-  OpnameNotifier() : super(_initialSessions);
+  OpnameNotifier([List<OpnameSession>? initialSessions])
+      : super(initialSessions ?? const []);
 
-  static final List<OpnameSession> _initialSessions = [
+  static final List<OpnameSession> sampleSessions = [
     OpnameSession(
       sessionCode: 'SOP-2026-1001',
       title: 'Cycle Count Rak A1 & A2 (Elektrik & Fiber)',

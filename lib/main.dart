@@ -16,16 +16,25 @@ void main() async {
   );
 }
 
-class OmniWarehouseApp extends ConsumerWidget {
+class OmniWarehouseApp extends ConsumerStatefulWidget {
   const OmniWarehouseApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Initialize auth state dari secure storage
-    ref.listen(authProvider.notifier, (_, notifier) {
-      notifier.initialize();
-    });
+  ConsumerState<OmniWarehouseApp> createState() => _OmniWarehouseAppState();
+}
 
+class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize auth state dari secure storage saat app start
+    Future.microtask(() {
+      ref.read(authProvider.notifier).initialize();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(

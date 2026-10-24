@@ -406,20 +406,27 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.admin_panel_settings_outlined, color: AppColors.textSecondary, size: 16),
-                  SizedBox(width: 8),
-                  Text(
-                    'Informasi Penugasan & Shift',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+              const Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.admin_panel_settings_outlined, color: AppColors.textSecondary, size: 16),
+                    SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Informasi Penugasan & Shift',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(

@@ -383,6 +383,7 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         height: 44,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                         decoration: BoxDecoration(
                           color: AppColors.primary,
                           borderRadius: BorderRadius.circular(12),
@@ -397,14 +398,18 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.qr_code_scanner_rounded, size: 18, color: Colors.white),
-                            SizedBox(width: 8),
-                            Text(
-                              'Scan Resi / Surat Jalan',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                            Icon(Icons.qr_code_scanner_rounded, size: 17, color: Colors.white),
+                            SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'Scan Resi / Surat Jalan',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ],
@@ -420,6 +425,7 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         height: 44,
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
@@ -428,14 +434,18 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.bolt_rounded, size: 18, color: Color(0xFFD97706)),
+                            Icon(Icons.bolt_rounded, size: 17, color: Color(0xFFD97706)),
                             SizedBox(width: 4),
-                            Text(
-                              'Keluar Cepat',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
+                            Flexible(
+                              child: Text(
+                                'Keluar Cepat',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
                             ),
                           ],
@@ -476,7 +486,7 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
 
               // List of Outbound Cards
               if (filteredOrders.isEmpty)
-                _buildEmptyState()
+                _buildEmptyState(hasAnyOrders: orders.isNotEmpty)
               else
                 ...filteredOrders.map((order) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -524,26 +534,30 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Menu Outbound',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Menu Outbound',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 1),
-                  Text(
-                    'Picking, Packing & Dispatch Ekspedisi',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+                    SizedBox(height: 1),
+                    Text(
+                      'Picking, Packing & Dispatch Ekspedisi',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -966,7 +980,98 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({required bool hasAnyOrders}) {
+    if (!hasAnyOrders) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.primaryBorder),
+              ),
+              child: const Icon(
+                Icons.outbox_rounded,
+                size: 30,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Belum Ada Pesanan Outbound',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Daftar pengiriman bersih. Mulai proses dengan scan nomor resi/SO atau buat pengeluaran stok cepat.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/scanner'),
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 16),
+                  label: const Text('Scan Resi / DO'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _showQuickStockOutDialog,
+                  icon: const Icon(Icons.bolt_rounded, size: 16),
+                  label: const Text('+ Quick Out'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primaryBorder),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
@@ -976,7 +1081,7 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.outbox_rounded, size: 48, color: AppColors.textMuted),
+          const Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted),
           const SizedBox(height: 12),
           const Text(
             'Tidak Ada Pesanan Outbound Ditemukan',

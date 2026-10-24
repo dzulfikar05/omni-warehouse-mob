@@ -291,6 +291,10 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                     flex: 1,
                     child: InkWell(
                       onTap: () {
+                        if (sessions.isEmpty) {
+                          _showQuickUmkmOpnameSheet();
+                          return;
+                        }
                         final active = sessions.firstWhere(
                           (s) => s.status == OpnameSessionStatus.active,
                           orElse: () => sessions.first,
@@ -408,7 +412,7 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
 
               // List of Sessions
               if (filteredSessions.isEmpty)
-                _buildEmptyState()
+                _buildEmptyState(hasAnySessions: sessions.isNotEmpty)
               else
                 ...filteredSessions.map((session) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -846,9 +850,100 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({required bool hasAnySessions}) {
+    if (!hasAnySessions) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.primaryBorder),
+              ),
+              child: const Icon(
+                Icons.fact_check_outlined,
+                size: 30,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Belum Ada Sesi Stock Opname',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Daftar audit bersih. Buat audit kilat mandiri UMKM atau mulai scan barcode rak untuk hitung fisik.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _showQuickUmkmOpnameSheet,
+                  icon: const Icon(Icons.bolt_rounded, size: 16),
+                  label: const Text('+ Audit Kilat'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => context.go('/scanner'),
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 16),
+                  label: const Text('Scan Rak'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primaryBorder),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -856,22 +951,10 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
       ),
       child: Column(
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF1F5F9),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.fact_check_outlined,
-              size: 28,
-              color: AppColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: 14),
+          const Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted),
+          const SizedBox(height: 12),
           const Text(
-            'Tidak ada sesi stock opname',
+            'Tidak Ada Sesi Opname Ditemukan',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -880,11 +963,29 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Belum ada sesi aktif dari Web atau filter pencarian tidak sesuai.',
+            'Coba ubah kata kunci pencarian atau sesuaikan filter status.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              _searchController.clear();
+              setState(() {
+                _searchQuery = '';
+                _selectedStatusFilter = null;
+              });
+            },
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Reset Filter'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.surfaceAlt,
+              foregroundColor: AppColors.textPrimary,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: const BorderSide(color: AppColors.border),
+              ),
             ),
           ),
         ],

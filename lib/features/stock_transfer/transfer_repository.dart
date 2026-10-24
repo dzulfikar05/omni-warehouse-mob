@@ -3,9 +3,10 @@ import '../../core/offline/sync_manager.dart';
 import 'transfer_model.dart';
 
 class TransferNotifier extends StateNotifier<List<StockTransferItem>> {
-  TransferNotifier() : super(_initialTransfers);
+  TransferNotifier([List<StockTransferItem>? initialTransfers])
+      : super(initialTransfers ?? const []);
 
-  static final List<StockTransferItem> _initialTransfers = [
+  static final List<StockTransferItem> sampleTransfers = [
     StockTransferItem(
       id: 'trf-101',
       referenceNumber: 'TRF-2026-0412',

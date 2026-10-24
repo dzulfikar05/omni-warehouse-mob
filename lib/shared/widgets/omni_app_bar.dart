@@ -51,47 +51,54 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Left: Squircle logo + Wordmark
-                InkWell(
-                  onTap: onLogoTap ?? () => context.go('/dashboard'),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(11),
-                            border: Border.all(
-                              color: AppColors.primaryBorder,
-                              width: 1,
+                Flexible(
+                  child: InkWell(
+                    onTap: onLogoTap ?? () => context.go('/dashboard'),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: AppColors.primaryBorder,
+                                width: 1,
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.inventory_2_rounded,
+                                color: AppColors.primary,
+                                size: 18,
+                              ),
                             ),
                           ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.inventory_2_rounded,
-                              color: AppColors.primary,
-                              size: 20,
+                          const SizedBox(width: 8),
+                          const Flexible(
+                            child: Text(
+                              'OmniWarehouse',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                                letterSpacing: -0.4,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'OmniWarehouse',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.4,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
+                const SizedBox(width: 6),
 
                 // Right: Notifications Bell + Status Dot & Profile Capsule
                 Row(
@@ -102,8 +109,8 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                       onTap: () => context.push('/notifications'),
                       borderRadius: BorderRadius.circular(999),
                       child: Container(
-                        width: 38,
-                        height: 38,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
                           color: AppColors.surfaceAlt,
                           shape: BoxShape.circle,
@@ -114,13 +121,13 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                           children: [
                             const Icon(
                               Icons.notifications_outlined,
-                              size: 20,
+                              size: 19,
                               color: AppColors.textPrimary,
                             ),
                             if (unreadNotifs > 0)
                               Positioned(
-                                top: 8,
-                                right: 8,
+                                top: 7,
+                                right: 7,
                                 child: Container(
                                   width: 8,
                                   height: 8,
@@ -134,14 +141,14 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
 
                     // Status Dot + Profile Avatar Capsule
                     InkWell(
                       onTap: onProfileTap ?? () => context.go('/more/profile'),
                       borderRadius: BorderRadius.circular(999),
                       child: Container(
-                        padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
+                        padding: const EdgeInsets.fromLTRB(8, 3, 3, 3),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceAlt,
                           borderRadius: BorderRadius.circular(999),
@@ -152,8 +159,8 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                           children: [
                             // Live Network Status Dot
                             Container(
-                              width: 10,
-                              height: 10,
+                              width: 8,
+                              height: 8,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: isOnline
@@ -163,16 +170,16 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                                   color: isOnline
                                       ? const Color(0xFFD1FAE5)
                                       : const Color(0xFFFFE4E6),
-                                  width: 2,
+                                  width: 1.5,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
 
                             // Initials Avatar Circle
                             Container(
-                              width: 32,
-                              height: 32,
+                              width: 28,
+                              height: 28,
                               decoration: const BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: AppColors.primary,
@@ -182,7 +189,7 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                                   initials,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 11,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w700,
                                     fontFamily: 'RobotoMono',
                                   ),

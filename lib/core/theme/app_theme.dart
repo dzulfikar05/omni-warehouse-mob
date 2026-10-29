@@ -30,6 +30,8 @@ ThemeData buildAppTheme() {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: AppColors.surfaceAlt,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      constraints: const BoxConstraints(minHeight: 52),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.border),
@@ -50,8 +52,17 @@ ThemeData buildAppTheme() {
         minimumSize: const Size(64, 48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: const TextStyle(
-          fontSize: 15, fontWeight: FontWeight.w600, fontFamily: 'Inter',
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'Inter',
         ),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.all(12),
+        tapTargetSize: MaterialTapTargetSize.padded,
       ),
     ),
   );

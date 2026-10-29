@@ -14,7 +14,8 @@ class OpnameScannerScreen extends ConsumerStatefulWidget {
   final String sessionCode;
 
   @override
-  ConsumerState<OpnameScannerScreen> createState() => _OpnameScannerScreenState();
+  ConsumerState<OpnameScannerScreen> createState() =>
+      _OpnameScannerScreenState();
 }
 
 class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
@@ -48,7 +49,8 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
   }
 
   void _showCountSheet(OpnameItem item, OpnameSession session) {
-    int currentQty = item.physicalQty ?? (session.isBlindCount ? 0 : item.systemQty);
+    int currentQty =
+        item.physicalQty ?? (session.isBlindCount ? 0 : item.systemQty);
     final notesController = TextEditingController(text: item.notes ?? '');
 
     showModalBottomSheet(
@@ -102,13 +104,19 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                           ),
                           Text(
                             '${item.sku} • Lokasi: ${item.rack}',
-                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.textSecondary,
+                      ),
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),
                   ],
@@ -116,7 +124,10 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                 const SizedBox(height: 12),
                 if (session.isBlindCount)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(8),
@@ -124,12 +135,20 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.visibility_off_outlined, size: 16, color: AppColors.primary),
+                        Icon(
+                          Icons.visibility_off_outlined,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Blind Count Aktif: Hitung murni fisik di rak secara akurat.',
-                            style: TextStyle(fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -137,7 +156,10 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                   )
                 else
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(8),
@@ -145,11 +167,19 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.textMuted),
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          size: 16,
+                          color: AppColors.textMuted,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'Stok Sistem: ${item.systemQty} ${item.unit}',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ],
                     ),
@@ -169,39 +199,53 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                 ),
                 const SizedBox(height: 10),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
                       iconSize: 32,
-                      icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.textSecondary),
+                      icon: const Icon(
+                        Icons.remove_circle_outline_rounded,
+                        color: AppColors.textSecondary,
+                      ),
                       onPressed: () {
                         if (currentQty > 0) {
                           setModalState(() => currentQty--);
                         }
                       },
                     ),
-                    const SizedBox(width: 14),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Text(
-                        '$currentQty ${item.unit}',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: 'RobotoMono',
-                          color: AppColors.textPrimary,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '$currentQty ${item.unit}',
+                            style: const TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'RobotoMono',
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 8),
                     IconButton(
                       iconSize: 32,
-                      icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
+                      icon: const Icon(
+                        Icons.add_circle_outline_rounded,
+                        color: AppColors.primary,
+                      ),
                       onPressed: () {
                         setModalState(() => currentQty++);
                       },
@@ -212,14 +256,26 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildQuickChip('0', () => setModalState(() => currentQty = 0)),
+                    _buildQuickChip(
+                      '0',
+                      () => setModalState(() => currentQty = 0),
+                    ),
                     const SizedBox(width: 8),
-                    _buildQuickChip('+5', () => setModalState(() => currentQty += 5)),
+                    _buildQuickChip(
+                      '+5',
+                      () => setModalState(() => currentQty += 5),
+                    ),
                     const SizedBox(width: 8),
-                    _buildQuickChip('+10', () => setModalState(() => currentQty += 10)),
+                    _buildQuickChip(
+                      '+10',
+                      () => setModalState(() => currentQty += 10),
+                    ),
                     if (!session.isBlindCount) ...[
                       const SizedBox(width: 8),
-                      _buildQuickChip('Sesuai', () => setModalState(() => currentQty = item.systemQty)),
+                      _buildQuickChip(
+                        'Sesuai',
+                        () => setModalState(() => currentQty = item.systemQty),
+                      ),
                     ],
                   ],
                 ),
@@ -238,8 +294,12 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                   controller: notesController,
                   style: const TextStyle(fontSize: 12),
                   decoration: InputDecoration(
-                    hintText: 'Misal: "Ditemukan 2 unit rusak fisik di sudut rak"',
-                    hintStyle: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    hintText:
+                        'Misal: "Ditemukan 2 unit rusak fisik di sudut rak"',
+                    hintStyle: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textMuted,
+                    ),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                     contentPadding: const EdgeInsets.all(12),
@@ -259,29 +319,39 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                   height: 46,
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      ref.read(opnameRepositoryProvider.notifier).updateItemPhysicalCount(
+                      ref
+                          .read(opnameRepositoryProvider.notifier)
+                          .updateItemPhysicalCount(
                             sessionCode: session.sessionCode,
                             itemId: item.id,
                             physicalQty: currentQty,
-                            notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                            notes: notesController.text.trim().isEmpty
+                                ? null
+                                : notesController.text.trim(),
                           );
                       Navigator.of(ctx).pop();
                       OmniSnackbar.show(
                         context,
-                        message: 'Fisik ${item.sku} tersimpan: $currentQty ${item.unit}',
+                        message:
+                            'Fisik ${item.sku} tersimpan: $currentQty ${item.unit}',
                         icon: Icons.check_circle_rounded,
                       );
                     },
                     icon: const Icon(Icons.check_rounded, size: 18),
                     label: const Text(
                       'Simpan Hasil Hitung Fisik',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -322,7 +392,10 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Selesaikan Hitungan Sesi?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+        title: const Text(
+          'Selesaikan Hitungan Sesi?',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+        ),
         content: Text(
           'Total ${session.countedItems} dari ${session.totalItems} item telah selesai dihitung fisik.\n\nData akan disinkronkan ke Web untuk ditinjau oleh Manager dalam proses Rekonsiliasi & Adjustment Akuntansi.',
           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
@@ -330,15 +403,21 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Lanjut Hitung', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'Lanjut Hitung',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
-              ref.read(opnameRepositoryProvider.notifier).submitSessionForReconciliation(session.sessionCode);
+              ref
+                  .read(opnameRepositoryProvider.notifier)
+                  .submitSessionForReconciliation(session.sessionCode);
               Navigator.of(ctx).pop();
               OmniSnackbar.show(
                 context,
-                message: 'Sesi ${session.sessionCode} terkirim ke Web untuk rekonsiliasi!',
+                message:
+                    'Sesi ${session.sessionCode} terkirim ke Web untuk rekonsiliasi!',
                 icon: Icons.cloud_done_rounded,
               );
               context.go('/more/opname');
@@ -347,7 +426,9 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text('Ya, Kirim ke Web'),
           ),
@@ -360,9 +441,9 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
   Widget build(BuildContext context) {
     final sessions = ref.watch(opnameRepositoryProvider);
     final session = sessions.cast<OpnameSession?>().firstWhere(
-          (s) => s?.sessionCode.toLowerCase() == widget.sessionCode.toLowerCase(),
-          orElse: () => null,
-        );
+      (s) => s?.sessionCode.toLowerCase() == widget.sessionCode.toLowerCase(),
+      orElse: () => null,
+    );
 
     if (session == null) {
       return Scaffold(
@@ -401,8 +482,10 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
                     itemCount: filteredItems.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, idx) => _buildItemTile(filteredItems[idx], session),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (ctx, idx) =>
+                        _buildItemTile(filteredItems[idx], session),
                   ),
                 ),
 
@@ -426,7 +509,10 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+                icon: const Icon(
+                  Icons.arrow_back_rounded,
+                  color: AppColors.textPrimary,
+                ),
                 onPressed: () => context.go('/more/opname'),
               ),
               const SizedBox(width: 4),
@@ -444,7 +530,11 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                   ),
                   Text(
                     '${session.countedItems}/${session.totalItems} Terhitung (${(session.progress * 100).toInt()}%)',
-                    style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -454,16 +544,21 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
             children: [
               IconButton(
                 icon: Icon(
-                  _isAudioBeepOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                  _isAudioBeepOn
+                      ? Icons.volume_up_rounded
+                      : Icons.volume_off_rounded,
                   color: AppColors.textSecondary,
                   size: 20,
                 ),
-                onPressed: () => setState(() => _isAudioBeepOn = !_isAudioBeepOn),
+                onPressed: () =>
+                    setState(() => _isAudioBeepOn = !_isAudioBeepOn),
               ),
               IconButton(
                 icon: Icon(
                   _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                  color: _isFlashOn ? const Color(0xFFFBBF24) : AppColors.textSecondary,
+                  color: _isFlashOn
+                      ? const Color(0xFFFBBF24)
+                      : AppColors.textSecondary,
                   size: 20,
                 ),
                 onPressed: () => setState(() => _isFlashOn = !_isFlashOn),
@@ -515,7 +610,11 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                         decoration: const BoxDecoration(
                           color: Color(0xFF2563EB),
                           boxShadow: [
-                            BoxShadow(color: Color(0xFF60A5FA), blurRadius: 6, spreadRadius: 1),
+                            BoxShadow(
+                              color: Color(0xFF60A5FA),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            ),
                           ],
                         ),
                       ),
@@ -541,7 +640,10 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                         _showCountSheet(it, session);
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(6),
@@ -585,7 +687,11 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
           decoration: const InputDecoration(
             hintText: 'Cari SKU, nama item, atau rak...',
             hintStyle: TextStyle(fontSize: 11, color: AppColors.textMuted),
-            prefixIcon: Icon(Icons.search_rounded, size: 18, color: AppColors.textMuted),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 18,
+              color: AppColors.textMuted,
+            ),
             border: InputBorder.none,
             contentPadding: EdgeInsets.symmetric(vertical: 10),
           ),
@@ -604,7 +710,9 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: item.physicalQty != null ? status.border : AppColors.border),
+          border: Border.all(
+            color: item.physicalQty != null ? status.border : AppColors.border,
+          ),
         ),
         child: Row(
           children: [
@@ -630,7 +738,7 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontFamily: 'RobotoMono',
-                            fontSize: 12,
+                            fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: AppColors.textPrimary,
                           ),
@@ -638,7 +746,10 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                       ),
                       const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: status.bg,
                           borderRadius: BorderRadius.circular(4),
@@ -646,7 +757,11 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                         ),
                         child: Text(
                           status.label,
-                          style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: status.color),
+                          style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            color: status.color,
+                          ),
                         ),
                       ),
                     ],
@@ -656,12 +771,20 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                     item.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 12, color: AppColors.textMuted),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 12,
+                        color: AppColors.textMuted,
+                      ),
                       const SizedBox(width: 3),
                       Flexible(
                         child: Text(
@@ -677,9 +800,19 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                       ),
                       if (item.notes != null) ...[
                         const SizedBox(width: 6),
-                        const Icon(Icons.note_alt_outlined, size: 12, color: AppColors.warning),
+                        const Icon(
+                          Icons.note_alt_outlined,
+                          size: 12,
+                          color: AppColors.warning,
+                        ),
                         const SizedBox(width: 2),
-                        const Text('Catatan', style: TextStyle(fontSize: 9, color: AppColors.warning)),
+                        const Text(
+                          'Catatan',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: AppColors.warning,
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -705,8 +838,8 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                       item.variance == 0
                           ? 'Sesuai'
                           : item.variance! > 0
-                              ? '+${item.variance}'
-                              : '${item.variance}',
+                          ? '+${item.variance}'
+                          : '${item.variance}',
                       style: TextStyle(
                         fontFamily: 'RobotoMono',
                         fontSize: 11,
@@ -716,14 +849,21 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
                     ),
                 ] else ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text(
                       'Hitung →',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -751,14 +891,20 @@ class _OpnameScannerScreenState extends ConsumerState<OpnameScannerScreen>
             onPressed: () => _finishSession(session),
             icon: const Icon(Icons.cloud_upload_outlined, size: 18),
             label: Text(
-              allCounted ? 'Kirim Hasil Opname ke Web' : 'Selesaikan (${session.countedItems}/${session.totalItems})',
+              allCounted
+                  ? 'Kirim Hasil Opname ke Web'
+                  : 'Selesaikan (${session.countedItems}/${session.totalItems})',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: allCounted ? AppColors.success : AppColors.primary,
+              backgroundColor: allCounted
+                  ? AppColors.success
+                  : AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ),

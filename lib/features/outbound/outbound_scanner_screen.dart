@@ -10,7 +10,7 @@ import 'outbound_repository.dart';
 
 enum OutboundExecutionMode {
   quickChecklist, // Mode Ceklis Cepat untuk UMKM
-  cameraScanner,   // Mode Barcode Scanner untuk Gudang Ber-rak / Enterprise
+  cameraScanner, // Mode Barcode Scanner untuk Gudang Ber-rak / Enterprise
 }
 
 class OutboundScannerScreen extends ConsumerStatefulWidget {
@@ -19,7 +19,8 @@ class OutboundScannerScreen extends ConsumerStatefulWidget {
   final String code;
 
   @override
-  ConsumerState<OutboundScannerScreen> createState() => _OutboundScannerScreenState();
+  ConsumerState<OutboundScannerScreen> createState() =>
+      _OutboundScannerScreenState();
 }
 
 class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
@@ -49,7 +50,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final order = ref.read(outboundRepositoryProvider.notifier).getOrderByCode(widget.code);
+      final order = ref
+          .read(outboundRepositoryProvider.notifier)
+          .getOrderByCode(widget.code);
       if (order != null && order.items.isNotEmpty) {
         _selectItem(order.items.first);
       }
@@ -71,7 +74,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
   }
 
   void _simulateScanSku(String sku) {
-    final order = ref.read(outboundRepositoryProvider.notifier).getOrderByCode(widget.code);
+    final order = ref
+        .read(outboundRepositoryProvider.notifier)
+        .getOrderByCode(widget.code);
     if (order == null) return;
 
     final match = order.items.firstWhere(
@@ -93,7 +98,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
     if (_activeScannedItem == null) return;
 
     HapticFeedback.mediumImpact();
-    ref.read(outboundRepositoryProvider.notifier).updateItemPickAndPack(
+    ref
+        .read(outboundRepositoryProvider.notifier)
+        .updateItemPickAndPack(
           orderCode: widget.code,
           itemId: _activeScannedItem!.id,
           pickedQty: _activePickedQty,
@@ -102,14 +109,19 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
 
     OmniSnackbar.show(
       context,
-      message: '${_activeScannedItem!.sku}: $_activePickedQty unit terambil & dipacking',
+      message:
+          '${_activeScannedItem!.sku}: $_activePickedQty unit terambil & dipacking',
       icon: Icons.check_circle_rounded,
     );
 
     // Auto-advance
-    final order = ref.read(outboundRepositoryProvider.notifier).getOrderByCode(widget.code);
+    final order = ref
+        .read(outboundRepositoryProvider.notifier)
+        .getOrderByCode(widget.code);
     if (order != null) {
-      final uncompleted = order.items.where((it) => it.id != _activeScannedItem!.id && !it.isFullyPicked);
+      final uncompleted = order.items.where(
+        (it) => it.id != _activeScannedItem!.id && !it.isFullyPicked,
+      );
       if (uncompleted.isNotEmpty) {
         _selectItem(uncompleted.first);
       }
@@ -118,7 +130,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
 
   void _batchPickAllItems() {
     HapticFeedback.heavyImpact();
-    ref.read(outboundRepositoryProvider.notifier).batchCheckAllItems(widget.code);
+    ref
+        .read(outboundRepositoryProvider.notifier)
+        .batchCheckAllItems(widget.code);
 
     OmniSnackbar.show(
       context,
@@ -142,7 +156,11 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                 color: AppColors.successLight,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.local_shipping_rounded, color: AppColors.success, size: 20),
+              child: const Icon(
+                Icons.local_shipping_rounded,
+                color: AppColors.success,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 10),
             const Text(
@@ -157,7 +175,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
           children: [
             Text(
               'Konfirmasi pengiriman pesanan ${order.code} untuk ${order.customer}?',
-              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+              ),
             ),
             const SizedBox(height: 10),
             Container(
@@ -169,12 +190,19 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.inventory_2_outlined, size: 16, color: AppColors.primary),
+                  const Icon(
+                    Icons.inventory_2_outlined,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Sebanyak ${order.totalPickedUnits} unit barang akan otomatis dipotong dari stok database web.',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF1E3A8A)),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF1E3A8A),
+                      ),
                     ),
                   ),
                 ],
@@ -185,7 +213,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'Batal',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -193,7 +224,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
               backgroundColor: AppColors.success,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text('Ya, Kirim Sekarang'),
           ),
@@ -212,7 +245,8 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
 
       OmniSnackbar.show(
         context,
-        message: 'Pesanan ${order.code} berhasil dikirim! Status web: DISPATCHED',
+        message:
+            'Pesanan ${order.code} berhasil dikirim! Status web: DISPATCHED',
         icon: Icons.cloud_done_rounded,
       );
 
@@ -270,17 +304,29 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
             TextField(
               controller: barcodeController,
               autofocus: true,
-              style: const TextStyle(fontFamily: 'RobotoMono', fontWeight: FontWeight.w700),
+              style: const TextStyle(
+                fontFamily: 'RobotoMono',
+                fontWeight: FontWeight.w700,
+              ),
               decoration: InputDecoration(
                 hintText: 'Contoh: SKU-ME-110...',
-                hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                hintStyle: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: AppColors.border),
                 ),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.check_rounded, color: AppColors.primary),
+                  icon: const Icon(
+                    Icons.check_rounded,
+                    color: AppColors.primary,
+                  ),
                   onPressed: () {
                     final query = barcodeController.text.trim();
                     if (query.isNotEmpty) {
@@ -307,9 +353,14 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-                child: const Text('Verifikasi Barang', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: const Text(
+                  'Verifikasi Barang',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ),
           ],
@@ -329,7 +380,7 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9), // slate-100
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(60),
+        preferredSize: Size.fromHeight(60 + MediaQuery.paddingOf(context).top),
         child: Container(
           padding: EdgeInsets.only(
             top: MediaQuery.of(context).padding.top + 6,
@@ -345,7 +396,11 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
             children: [
               IconButton(
                 onPressed: () => context.go('/outbound'),
-                icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary, size: 20),
+                icon: const Icon(
+                  Icons.arrow_back_rounded,
+                  color: AppColors.textPrimary,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 4),
               Expanded(
@@ -366,7 +421,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                         ),
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: order.status.bg,
                             borderRadius: BorderRadius.circular(4),
@@ -387,7 +445,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                       '${order.customer} • ${order.expedition}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -398,21 +459,34 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                     setState(() => _isFlashOn = !_isFlashOn);
                     OmniSnackbar.show(
                       context,
-                      message: _isFlashOn ? 'Senter kamera aktif' : 'Senter kamera mati',
-                      icon: _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                      message: _isFlashOn
+                          ? 'Senter kamera aktif'
+                          : 'Senter kamera mati',
+                      icon: _isFlashOn
+                          ? Icons.flash_on_rounded
+                          : Icons.flash_off_rounded,
                     );
                   },
                   icon: Icon(
-                    _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                    color: _isFlashOn ? const Color(0xFFFACC15) : AppColors.textSecondary,
+                    _isFlashOn
+                        ? Icons.flash_on_rounded
+                        : Icons.flash_off_rounded,
+                    color: _isFlashOn
+                        ? const Color(0xFFFACC15)
+                        : AppColors.textSecondary,
                     size: 18,
                   ),
                 ),
                 IconButton(
-                  onPressed: () => setState(() => _isAudioBeepOn = !_isAudioBeepOn),
+                  onPressed: () =>
+                      setState(() => _isAudioBeepOn = !_isAudioBeepOn),
                   icon: Icon(
-                    _isAudioBeepOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                    color: _isAudioBeepOn ? AppColors.primary : AppColors.textSecondary,
+                    _isAudioBeepOn
+                        ? Icons.volume_up_rounded
+                        : Icons.volume_off_rounded,
+                    color: _isAudioBeepOn
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
                     size: 18,
                   ),
                 ),
@@ -429,7 +503,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                 },
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: _mode == OutboundExecutionMode.quickChecklist
                         ? const Color(0xFFF1F5F9)
@@ -454,7 +531,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        _mode == OutboundExecutionMode.quickChecklist ? 'Ceklis' : 'Scanner',
+                        _mode == OutboundExecutionMode.quickChecklist
+                            ? 'Ceklis'
+                            : 'Scanner',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -471,70 +550,87 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
           ),
         ),
       ),
-      body: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Column(
-            children: [
-              // Overall Progress Strip
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF8FAFC),
-                  border: Border(bottom: BorderSide(color: AppColors.border)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.outbox_rounded, size: 16, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                order.waveId ?? 'Progres Pengambilan (Picking)',
-                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                '${order.totalPickedUnits} / ${order.totalOrderUnits} Units (${(order.progressPercentage * 100).toInt()}%)',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontFamily: 'RobotoMono',
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              children: [
+                // Overall Progress Strip
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF8FAFC),
+                    border: Border(bottom: BorderSide(color: AppColors.border)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.outbox_rounded,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  order.waveId ??
+                                      'Progres Pengambilan (Picking)',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  '${order.totalPickedUnits} / ${order.totalOrderUnits} Units (${(order.progressPercentage * 100).toInt()}%)',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontFamily: 'RobotoMono',
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: order.progressPercentage,
+                                minHeight: 5,
+                                backgroundColor: const Color(0xFFE2E8F0),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  order.isFullyPicked
+                                      ? AppColors.success
+                                      : AppColors.primary,
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(999),
-                            child: LinearProgressIndicator(
-                              value: order.progressPercentage,
-                              minHeight: 5,
-                              backgroundColor: const Color(0xFFE2E8F0),
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                order.isFullyPicked ? AppColors.success : AppColors.primary,
-                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              // Viewport Content: Mode Ceklis vs Mode Scanner
-              Expanded(
-                child: _mode == OutboundExecutionMode.quickChecklist
-                    ? _buildQuickChecklistView(order)
-                    : _buildCameraScannerView(order),
-              ),
-            ],
+                // Viewport Content: Mode Ceklis vs Mode Scanner
+                Expanded(
+                  child: _mode == OutboundExecutionMode.quickChecklist
+                      ? _buildQuickChecklistView(order)
+                      : _buildCameraScannerView(order),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -563,7 +659,11 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
+                child: const Icon(
+                  Icons.bolt_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -589,7 +689,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                 onTap: _batchPickAllItems,
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(8),
@@ -654,11 +757,16 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Icon(Icons.local_shipping_rounded, size: 18),
             label: Text(
-              _isCommitting ? 'Menyimpan ke Server...' : 'Commit Dispatch & Selesai',
+              _isCommitting
+                  ? 'Menyimpan ke Server...'
+                  : 'Commit Dispatch & Selesai',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
             style: ElevatedButton.styleFrom(
@@ -694,7 +802,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
           InkWell(
             onTap: () {
               final newQty = isDone ? 0 : item.orderQty;
-              ref.read(outboundRepositoryProvider.notifier).updateItemPickAndPack(
+              ref
+                  .read(outboundRepositoryProvider.notifier)
+                  .updateItemPickAndPack(
                     orderCode: order.code,
                     itemId: item.id,
                     pickedQty: newQty,
@@ -703,8 +813,8 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
             },
             borderRadius: BorderRadius.circular(8),
             child: Container(
-              width: 32,
-              height: 32,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 color: isDone ? AppColors.success : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(8),
@@ -713,9 +823,11 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                 ),
               ),
               child: Icon(
-                isDone ? Icons.check_rounded : Icons.radio_button_unchecked_rounded,
+                isDone
+                    ? Icons.check_rounded
+                    : Icons.radio_button_unchecked_rounded,
                 color: isDone ? Colors.white : AppColors.textMuted,
-                size: 18,
+                size: 22,
               ),
             ),
           ),
@@ -726,31 +838,37 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  item.sku,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'RobotoMono',
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Row(
                   children: [
-                    Text(
-                      item.sku,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'RobotoMono',
-                        color: AppColors.primary,
-                      ),
+                    const Icon(
+                      Icons.location_on_rounded,
+                      size: 16,
+                      color: AppColors.primary,
                     ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                    const SizedBox(width: 4),
+                    Expanded(
                       child: Text(
                         item.fromRack,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 9,
+                          fontSize: 14,
+                          height: 1.2,
+                          fontWeight: FontWeight.w800,
                           fontFamily: 'RobotoMono',
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ),
@@ -778,7 +896,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                 icon: Icons.remove_rounded,
                 onTap: () {
                   if (item.pickedQty > 0) {
-                    ref.read(outboundRepositoryProvider.notifier).updateItemPickAndPack(
+                    ref
+                        .read(outboundRepositoryProvider.notifier)
+                        .updateItemPickAndPack(
                           orderCode: order.code,
                           itemId: item.id,
                           pickedQty: item.pickedQty - 1,
@@ -794,7 +914,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                   fontFamily: 'RobotoMono',
-                  color: isDone ? const Color(0xFF166534) : AppColors.textPrimary,
+                  color: isDone
+                      ? const Color(0xFF166534)
+                      : AppColors.textPrimary,
                 ),
               ),
               const SizedBox(width: 6),
@@ -802,7 +924,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                 icon: Icons.add_rounded,
                 onTap: () {
                   if (item.pickedQty < item.orderQty) {
-                    ref.read(outboundRepositoryProvider.notifier).updateItemPickAndPack(
+                    ref
+                        .read(outboundRepositoryProvider.notifier)
+                        .updateItemPickAndPack(
                           orderCode: order.code,
                           itemId: item.id,
                           pickedQty: item.pickedQty + 1,
@@ -844,7 +968,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                 height: 160,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.5), width: 1.5),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
                 ),
                 child: Stack(
                   children: [
@@ -857,8 +984,14 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                         height: 22,
                         decoration: const BoxDecoration(
                           border: Border(
-                            top: BorderSide(color: AppColors.primary, width: 3.5),
-                            left: BorderSide(color: AppColors.primary, width: 3.5),
+                            top: BorderSide(
+                              color: AppColors.primary,
+                              width: 3.5,
+                            ),
+                            left: BorderSide(
+                              color: AppColors.primary,
+                              width: 3.5,
+                            ),
                           ),
                         ),
                       ),
@@ -871,8 +1004,14 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                         height: 22,
                         decoration: const BoxDecoration(
                           border: Border(
-                            top: BorderSide(color: AppColors.primary, width: 3.5),
-                            right: BorderSide(color: AppColors.primary, width: 3.5),
+                            top: BorderSide(
+                              color: AppColors.primary,
+                              width: 3.5,
+                            ),
+                            right: BorderSide(
+                              color: AppColors.primary,
+                              width: 3.5,
+                            ),
                           ),
                         ),
                       ),
@@ -885,8 +1024,14 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                         height: 22,
                         decoration: const BoxDecoration(
                           border: Border(
-                            bottom: BorderSide(color: AppColors.primary, width: 3.5),
-                            left: BorderSide(color: AppColors.primary, width: 3.5),
+                            bottom: BorderSide(
+                              color: AppColors.primary,
+                              width: 3.5,
+                            ),
+                            left: BorderSide(
+                              color: AppColors.primary,
+                              width: 3.5,
+                            ),
                           ),
                         ),
                       ),
@@ -899,8 +1044,14 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                         height: 22,
                         decoration: const BoxDecoration(
                           border: Border(
-                            bottom: BorderSide(color: AppColors.primary, width: 3.5),
-                            right: BorderSide(color: AppColors.primary, width: 3.5),
+                            bottom: BorderSide(
+                              color: AppColors.primary,
+                              width: 3.5,
+                            ),
+                            right: BorderSide(
+                              color: AppColors.primary,
+                              width: 3.5,
+                            ),
                           ),
                         ),
                       ),
@@ -945,7 +1096,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
               Positioned(
                 bottom: 44,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(999),
@@ -955,7 +1109,11 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                     _activeScannedItem != null
                         ? 'Lokasi: ${_activeScannedItem!.fromRack} • Scan Barcode SKU'
                         : 'Arahkan kamera ke Barcode Barang',
-                    style: const TextStyle(fontSize: 11, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ),
@@ -984,12 +1142,17 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                           onTap: () => _simulateScanSku(item.sku),
                           borderRadius: BorderRadius.circular(6),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             margin: const EdgeInsets.only(right: 6),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppColors.primaryBorder),
+                              border: Border.all(
+                                color: AppColors.primaryBorder,
+                              ),
                             ),
                             child: Text(
                               '${item.sku} (${item.fromRack})',
@@ -1017,7 +1180,11 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             boxShadow: [
-              BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, -4)),
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 12,
+                offset: Offset(0, -4),
+              ),
             ],
           ),
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
@@ -1046,7 +1213,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                               ),
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFEFF6FF),
                                   borderRadius: BorderRadius.circular(4),
@@ -1068,7 +1238,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                             _activeScannedItem!.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ],
                       ),
@@ -1076,7 +1249,13 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('Target Order', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                        const Text(
+                          'Target Order',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
                         Text(
                           '${_activeScannedItem!.orderQty} ${_activeScannedItem!.unit}',
                           style: const TextStyle(
@@ -1107,7 +1286,11 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                           children: [
                             const Text(
                               'Picked Qty (Terambil)',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF92400E)),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF92400E),
+                              ),
                             ),
                             const SizedBox(height: 6),
                             Row(
@@ -1124,7 +1307,7 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                                 Text(
                                   '$_activePickedQty',
                                   style: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.w800,
                                     fontFamily: 'RobotoMono',
                                     color: Color(0xFF92400E),
@@ -1133,7 +1316,8 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                                 _buildSmallStepperBtn(
                                   icon: Icons.add_rounded,
                                   onTap: () {
-                                    if (_activePickedQty < _activeScannedItem!.orderQty) {
+                                    if (_activePickedQty <
+                                        _activeScannedItem!.orderQty) {
                                       setState(() => _activePickedQty++);
                                     }
                                   },
@@ -1158,7 +1342,11 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                           children: [
                             const Text(
                               'Packed Qty (Dipacking)',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF5B21B6)),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF5B21B6),
+                              ),
                             ),
                             const SizedBox(height: 6),
                             Row(
@@ -1175,7 +1363,7 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                                 Text(
                                   '$_activePackedQty',
                                   style: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.w800,
                                     fontFamily: 'RobotoMono',
                                     color: Color(0xFF5B21B6),
@@ -1184,7 +1372,8 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                                 _buildSmallStepperBtn(
                                   icon: Icons.add_rounded,
                                   onTap: () {
-                                    if (_activePackedQty < _activeScannedItem!.orderQty) {
+                                    if (_activePackedQty <
+                                        _activeScannedItem!.orderQty) {
                                       setState(() => _activePackedQty++);
                                     }
                                   },
@@ -1215,7 +1404,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -1228,34 +1419,52 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
                     child: OutlinedButton.icon(
                       onPressed: _showManualInputDialog,
                       icon: const Icon(Icons.keyboard_outlined, size: 16),
-                      label: const Text('Input Manual', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      label: const Text(
+                        'Input Manual',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.textSecondary,
                         side: const BorderSide(color: AppColors.border),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _isCommitting ? null : () => _commitDispatch(order),
+                      onPressed: _isCommitting
+                          ? null
+                          : () => _commitDispatch(order),
                       icon: _isCommitting
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : const Icon(Icons.local_shipping_rounded, size: 16),
                       label: Text(
                         _isCommitting ? 'Menyimpan...' : 'Commit Dispatch',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.success,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
@@ -1268,19 +1477,22 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen>
     );
   }
 
-  Widget _buildSmallStepperBtn({required IconData icon, required VoidCallback onTap}) {
+  Widget _buildSmallStepperBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
       child: Container(
-        width: 26,
-        height: 26,
+        width: 48,
+        height: 48,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: const Color(0xFFCBD5E1)),
         ),
-        child: Icon(icon, size: 15, color: AppColors.textPrimary),
+        child: Icon(icon, size: 20, color: AppColors.textPrimary),
       ),
     );
   }

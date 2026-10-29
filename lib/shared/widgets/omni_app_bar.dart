@@ -109,8 +109,8 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                       onTap: () => context.push('/notifications'),
                       borderRadius: BorderRadius.circular(999),
                       child: Container(
-                        width: 36,
-                        height: 36,
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
                           color: AppColors.surfaceAlt,
                           shape: BoxShape.circle,
@@ -148,7 +148,8 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                       onTap: onProfileTap ?? () => context.go('/more/profile'),
                       borderRadius: BorderRadius.circular(999),
                       child: Container(
-                        padding: const EdgeInsets.fromLTRB(8, 3, 3, 3),
+                        constraints: const BoxConstraints(minHeight: 48),
+                        padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceAlt,
                           borderRadius: BorderRadius.circular(999),
@@ -178,8 +179,8 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
                             // Initials Avatar Circle
                             Container(
-                              width: 28,
-                              height: 28,
+                              width: 32,
+                              height: 32,
                               decoration: const BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: AppColors.primary,
@@ -212,8 +213,12 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
   String _getInitials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts[0].isEmpty) return 'BS';
-    if (parts.length == 1) return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+    if (parts.isEmpty || parts[0].isEmpty) {
+      return 'BS';
+    }
+    if (parts.length == 1) {
+      return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+    }
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 }

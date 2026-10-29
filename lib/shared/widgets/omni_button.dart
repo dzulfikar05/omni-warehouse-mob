@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 
-enum OmniButtonVariant {
-  primary,
-  secondary,
-  danger,
-  outline,
-}
+enum OmniButtonVariant { primary, secondary, danger, outline }
 
 class OmniButton extends StatelessWidget {
   const OmniButton({
@@ -60,12 +55,18 @@ class OmniButton extends StatelessWidget {
           Icon(icon, size: 18, color: fg),
           const SizedBox(width: 8),
         ],
-        Text(
-          label,
-          style: TextStyle(
-            color: fg,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: fg,
+              fontSize: 14,
+              height: 1.2,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],
@@ -84,7 +85,7 @@ class OmniButton extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-      height: height,
+      height: height < 48 ? 48 : height,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(

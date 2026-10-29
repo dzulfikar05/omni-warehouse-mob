@@ -87,7 +87,8 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
   void _updateLocationDefaults() {
     switch (_selectedType) {
       case TransferType.binToBin:
-        _fromLocationController.text = _selectedProduct['defaultRack'] as String;
+        _fromLocationController.text =
+            _selectedProduct['defaultRack'] as String;
         _toLocationController.text = 'RACK-B1-02';
         break;
       case TransferType.interWarehouse:
@@ -117,7 +118,8 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
     if (qty > maxStock) {
       OmniSnackbar.show(
         context,
-        message: 'Jumlah transfer ($qty) melebihi stok yang tersedia ($maxStock)',
+        message:
+            'Jumlah transfer ($qty) melebihi stok yang tersedia ($maxStock)',
         icon: Icons.error_outline_rounded,
       );
       return;
@@ -159,7 +161,9 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
           : TransferStatus.completed,
       createdAt: 'Baru saja',
       operatorName: 'Budi Santoso',
-      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      notes: _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
       availableStock: maxStock - qty,
     );
 
@@ -193,7 +197,10 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
         elevation: 0,
         centerTitle: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.arrow_back_rounded,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () => context.pop(),
         ),
         bottom: PreferredSize(
@@ -247,13 +254,18 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
                 _selectedType == TransferType.interWarehouse
                     ? 'Kirim Mutasi Antar Cabang'
                     : 'Konfirmasi Mutasi Stok',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _selectedType.color,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -337,7 +349,9 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
                 style: TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.w500,
-                  color: isSelected ? AppColors.textPrimary : AppColors.textMuted,
+                  color: isSelected
+                      ? AppColors.textPrimary
+                      : AppColors.textMuted,
                 ),
               ),
             ],
@@ -374,7 +388,10 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
             decoration: InputDecoration(
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: AppColors.border),
@@ -443,7 +460,11 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.sync_alt_rounded, size: 16, color: AppColors.primary),
+              const Icon(
+                Icons.sync_alt_rounded,
+                size: 16,
+                color: AppColors.primary,
+              ),
               const SizedBox(width: 6),
               const Text(
                 'RUTE PERPINDAHAN STOK',
@@ -461,7 +482,11 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
           // Origin
           const Text(
             'Lokasi Asal (Dari):',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 6),
           if (_selectedType == TransferType.interWarehouse)
@@ -471,7 +496,10 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -482,7 +510,12 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
                 ),
               ),
               items: _warehouseList
-                  .map((w) => DropdownMenuItem(value: w, child: Text(w, style: const TextStyle(fontSize: 12))))
+                  .map(
+                    (w) => DropdownMenuItem(
+                      value: w,
+                      child: Text(w, style: const TextStyle(fontSize: 12)),
+                    ),
+                  )
                   .toList(),
               onChanged: (val) {
                 if (val != null) setState(() => _selectedFromWarehouse = val);
@@ -495,8 +528,15 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
-                prefixIcon: const Icon(Icons.location_on_outlined, size: 18, color: AppColors.textMuted),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                prefixIcon: const Icon(
+                  Icons.location_on_outlined,
+                  size: 18,
+                  color: AppColors.textMuted,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -508,12 +548,32 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
               ),
             ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
+          Center(
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.south_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
 
           // Destination
           const Text(
             'Lokasi Tujuan (Ke):',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 6),
           if (_selectedType == TransferType.interWarehouse)
@@ -523,7 +583,10 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -534,7 +597,12 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
                 ),
               ),
               items: _warehouseList
-                  .map((w) => DropdownMenuItem(value: w, child: Text(w, style: const TextStyle(fontSize: 12))))
+                  .map(
+                    (w) => DropdownMenuItem(
+                      value: w,
+                      child: Text(w, style: const TextStyle(fontSize: 12)),
+                    ),
+                  )
                   .toList(),
               onChanged: (val) {
                 if (val != null) setState(() => _selectedToWarehouse = val);
@@ -547,8 +615,15 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
-                prefixIcon: const Icon(Icons.flag_outlined, size: 18, color: AppColors.primary),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                prefixIcon: const Icon(
+                  Icons.flag_outlined,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -629,7 +704,10 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
                   ),
                   decoration: InputDecoration(
                     suffixText: _selectedProduct['unit'] as String,
-                    suffixStyle: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    suffixStyle: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -672,13 +750,16 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
     );
   }
 
-  Widget _buildStepButton({required IconData icon, required VoidCallback onTap}) {
+  Widget _buildStepButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        width: 44,
-        height: 44,
+        width: 48,
+        height: 48,
         decoration: BoxDecoration(
           color: const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(10),
@@ -747,8 +828,12 @@ class _TransferFormScreenState extends ConsumerState<TransferFormScreen> {
             maxLines: 2,
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'Opsional: misal "Via ekspedisi Lalamove" atau "Pindah etalase kasir"',
-              hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              hintText:
+                  'Opsional: misal "Via ekspedisi Lalamove" atau "Pindah etalase kasir"',
+              hintStyle: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textMuted,
+              ),
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
               contentPadding: const EdgeInsets.all(12),

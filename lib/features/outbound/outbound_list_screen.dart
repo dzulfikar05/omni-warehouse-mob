@@ -28,7 +28,8 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
 
   void _showQuickStockOutDialog() {
     final codeController = TextEditingController(
-      text: 'OUT-EXP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+      text:
+          'OUT-EXP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
     );
     final customerController = TextEditingController();
     final skuController = TextEditingController(text: 'SKU-ME-110');
@@ -92,7 +93,10 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(ctx).pop(),
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -120,14 +124,21 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: const Color(0xFFEFF6FF),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.primaryBorder),
+                    borderSide: const BorderSide(
+                      color: AppColors.primaryBorder,
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.primaryBorder),
+                    borderSide: const BorderSide(
+                      color: AppColors.primaryBorder,
+                    ),
                   ),
                 ),
               ),
@@ -147,8 +158,14 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                 controller: customerController,
                 decoration: InputDecoration(
                   hintText: 'Contoh: Pembeli Langsung Ruko / Kirim Kurir',
-                  hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  hintStyle: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: AppColors.border),
@@ -177,10 +194,15 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                         TextField(
                           controller: skuController,
                           decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
                             ),
                           ),
                         ),
@@ -207,10 +229,15 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                           controller: qtyController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
                             ),
                           ),
                         ),
@@ -235,8 +262,14 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                 controller: notesController,
                 decoration: InputDecoration(
                   hintText: 'Contoh: Beli cash / Sampel promosi / Resi SPX',
-                  hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  hintStyle: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: AppColors.border),
@@ -254,12 +287,19 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.bolt_rounded, size: 16, color: Color(0xFFD97706)),
+                    Icon(
+                      Icons.bolt_rounded,
+                      size: 16,
+                      color: Color(0xFFD97706),
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Mode cepat: Lokasi rak otomatis diambil dari stok utama ruko/toko Anda.',
-                        style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
                   ],
@@ -302,11 +342,14 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                       ],
                     );
 
-                    ref.read(outboundRepositoryProvider.notifier).addQuickStockOut(quickOrder);
+                    ref
+                        .read(outboundRepositoryProvider.notifier)
+                        .addQuickStockOut(quickOrder);
                     Navigator.of(ctx).pop();
                     OmniSnackbar.show(
                       context,
-                      message: 'Stok berhasil dikeluarkan: $qty unit ${skuController.text.trim()}',
+                      message:
+                          'Stok berhasil dikeluarkan: $qty unit ${skuController.text.trim()}',
                       icon: Icons.check_circle_rounded,
                     );
                   },
@@ -338,14 +381,20 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
     final stats = ref.watch(outboundStatsProvider);
 
     final filteredOrders = orders.where((o) {
-      final matchesSearch = _searchQuery.isEmpty ||
+      final matchesSearch =
+          _searchQuery.isEmpty ||
           o.code.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           o.customer.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           o.expedition.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          (o.trackingNumber?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false) ||
-          (o.waveId?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
+          (o.trackingNumber?.toLowerCase().contains(
+                _searchQuery.toLowerCase(),
+              ) ??
+              false) ||
+          (o.waveId?.toLowerCase().contains(_searchQuery.toLowerCase()) ??
+              false);
 
-      final matchesStatus = _selectedStatusFilter == null || o.status == _selectedStatusFilter;
+      final matchesStatus =
+          _selectedStatusFilter == null || o.status == _selectedStatusFilter;
 
       return matchesSearch && matchesStatus;
     }).toList();
@@ -382,7 +431,7 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                       },
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        height: 44,
+                        height: 48,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         decoration: BoxDecoration(
                           color: AppColors.primary,
@@ -398,7 +447,11 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.qr_code_scanner_rounded, size: 17, color: Colors.white),
+                            Icon(
+                              Icons.qr_code_scanner_rounded,
+                              size: 17,
+                              color: Colors.white,
+                            ),
                             SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -424,7 +477,7 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                       onTap: _showQuickStockOutDialog,
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        height: 44,
+                        height: 48,
                         padding: const EdgeInsets.symmetric(horizontal: 6),
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -434,7 +487,11 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.bolt_rounded, size: 17, color: Color(0xFFD97706)),
+                            Icon(
+                              Icons.bolt_rounded,
+                              size: 17,
+                              color: Color(0xFFD97706),
+                            ),
                             SizedBox(width: 4),
                             Flexible(
                               child: Text(
@@ -488,10 +545,12 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
               if (filteredOrders.isEmpty)
                 _buildEmptyState(hasAnyOrders: orders.isNotEmpty)
               else
-                ...filteredOrders.map((order) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildOrderCard(order),
-                    )),
+                ...filteredOrders.map(
+                  (order) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildOrderCard(order),
+                  ),
+                ),
             ],
           ),
         ),
@@ -571,11 +630,23 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
             ),
             child: Row(
               children: [
-                _buildStatPill('Pesanan Hari Ini', '${stats.todayTotal}', const Color(0xFF004AC6)),
+                _buildStatPill(
+                  'Pesanan Hari Ini',
+                  '${stats.todayTotal}',
+                  const Color(0xFF004AC6),
+                ),
                 Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
-                _buildStatPill('Dalam Picking', '${stats.picking}', const Color(0xFFD97706)),
+                _buildStatPill(
+                  'Dalam Picking',
+                  '${stats.picking}',
+                  const Color(0xFFD97706),
+                ),
                 Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
-                _buildStatPill('Selesai Dispatch', '${stats.dispatched}', const Color(0xFF059669)),
+                _buildStatPill(
+                  'Selesai Dispatch',
+                  '${stats.dispatched}',
+                  const Color(0xFF059669),
+                ),
               ],
             ),
           ),
@@ -626,10 +697,18 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
         decoration: InputDecoration(
           hintText: 'Cari No. DO/SO, Customer, Resi, Wave...',
           hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-          prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textMuted),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: AppColors.textMuted,
+          ),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear_rounded, size: 18, color: AppColors.textMuted),
+                  icon: const Icon(
+                    Icons.clear_rounded,
+                    size: 18,
+                    color: AppColors.textMuted,
+                  ),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
@@ -662,7 +741,10 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
               onTap: () => setState(() => _selectedStatusFilter = filter.$1),
               borderRadius: BorderRadius.circular(999),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.primary : Colors.white,
                   borderRadius: BorderRadius.circular(999),
@@ -730,10 +812,7 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Left Vertical Color Bar
-              Container(
-                width: 5,
-                color: accentColor,
-              ),
+              Container(width: 5, color: accentColor),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -758,11 +837,16 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                               if (order.waveId != null) ...[
                                 const SizedBox(width: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFEFF6FF),
                                     borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: AppColors.primaryBorder),
+                                    border: Border.all(
+                                      color: AppColors.primaryBorder,
+                                    ),
                                   ),
                                   child: Text(
                                     order.waveId!,
@@ -778,7 +862,10 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                             ],
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: order.status.bg,
                               borderRadius: BorderRadius.circular(999),
@@ -801,7 +888,11 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                       // Customer & Staging Bay
                       Row(
                         children: [
-                          const Icon(Icons.person_pin_circle_outlined, size: 14, color: AppColors.textSecondary),
+                          const Icon(
+                            Icons.person_pin_circle_outlined,
+                            size: 14,
+                            color: AppColors.textSecondary,
+                          ),
                           const SizedBox(width: 5),
                           Expanded(
                             child: Text(
@@ -816,7 +907,10 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(6),
@@ -838,7 +932,10 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
 
                       // Courier & Units Pill Strip
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(8),
@@ -846,7 +943,11 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.local_shipping_outlined, size: 14, color: AppColors.primary),
+                            const Icon(
+                              Icons.local_shipping_outlined,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
@@ -905,7 +1006,11 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                           minHeight: 6,
                           backgroundColor: const Color(0xFFE2E8F0),
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            isDispatched ? AppColors.success : (isPicking ? const Color(0xFFD97706) : AppColors.primary),
+                            isDispatched
+                                ? AppColors.success
+                                : (isPicking
+                                      ? const Color(0xFFD97706)
+                                      : AppColors.primary),
                           ),
                         ),
                       ),
@@ -917,7 +1022,11 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.confirmation_number_outlined, size: 13, color: AppColors.textMuted),
+                              const Icon(
+                                Icons.confirmation_number_outlined,
+                                size: 13,
+                                color: AppColors.textMuted,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 order.trackingNumber != null
@@ -938,11 +1047,17 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               height: 34,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
                               decoration: BoxDecoration(
-                                color: isDispatched ? const Color(0xFFF1F5F9) : AppColors.primary,
+                                color: isDispatched
+                                    ? const Color(0xFFF1F5F9)
+                                    : AppColors.primary,
                                 borderRadius: BorderRadius.circular(8),
-                                border: isDispatched ? Border.all(color: AppColors.border) : null,
+                                border: isDispatched
+                                    ? Border.all(color: AppColors.border)
+                                    : null,
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -952,15 +1067,21 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                                         ? Icons.visibility_outlined
                                         : Icons.arrow_forward_rounded,
                                     size: 15,
-                                    color: isDispatched ? AppColors.textPrimary : Colors.white,
+                                    color: isDispatched
+                                        ? AppColors.textPrimary
+                                        : Colors.white,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    isDispatched ? 'Lihat Detail' : 'Lanjut Picking',
+                                    isDispatched
+                                        ? 'Lihat Detail'
+                                        : 'Lanjut Picking',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
-                                      color: isDispatched ? AppColors.textPrimary : Colors.white,
+                                      color: isDispatched
+                                          ? AppColors.textPrimary
+                                          : Colors.white,
                                     ),
                                   ),
                                 ],
@@ -1046,7 +1167,10 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -1059,7 +1183,10 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primaryBorder),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -1081,7 +1208,11 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted),
+          const Icon(
+            Icons.search_off_rounded,
+            size: 48,
+            color: AppColors.textMuted,
+          ),
           const SizedBox(height: 12),
           const Text(
             'Tidak Ada Pesanan Outbound Ditemukan',

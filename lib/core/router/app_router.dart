@@ -1,27 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../shared/widgets/omni_bottom_nav.dart';
+
+import '../../core/auth/auth_provider.dart';
+import '../../features/auth/auth_model.dart';
 import '../../features/auth/home_screen.dart';
 import '../../features/auth/login_step1_screen.dart';
 import '../../features/auth/login_step2_screen.dart';
+
+// Import Feature Screens
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/inbound/inbound_list_screen.dart';
 import '../../features/inbound/inbound_scanner_screen.dart';
+import '../../features/notifications/notifications_screen.dart';
 import '../../features/outbound/outbound_list_screen.dart';
 import '../../features/outbound/outbound_scanner_screen.dart';
-import '../../features/stock_transfer/transfer_list_screen.dart';
-import '../../features/stock_transfer/transfer_form_screen.dart';
-import '../../features/stock_transfer/transfer_scanner_screen.dart';
+import '../../features/profile/edit_profile_screen.dart';
+import '../../features/profile/profile_screen.dart';
+import '../../features/scanner/generic_scanner_screen.dart';
+import '../../features/splash/splash_screen.dart';
 import '../../features/stock_opname/opname_list_screen.dart';
 import '../../features/stock_opname/opname_scanner_screen.dart';
-import '../../features/scanner/generic_scanner_screen.dart';
+import '../../features/stock_transfer/transfer_form_screen.dart';
+import '../../features/stock_transfer/transfer_list_screen.dart';
+import '../../features/stock_transfer/transfer_scanner_screen.dart';
 import '../../features/sync/sync_screen.dart';
-import '../../features/profile/profile_screen.dart';
-import '../../features/profile/edit_profile_screen.dart';
-import '../../features/splash/splash_screen.dart';
-import '../../features/notifications/notifications_screen.dart';
-import '../auth/auth_provider.dart';
+import '../../shared/widgets/omni_bottom_nav.dart';
 
 CustomTransitionPage<void> _buildFadePage({
   required LocalKey key,
@@ -46,48 +50,69 @@ CustomTransitionPage<void> _buildFadePage({
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  final refreshListenable = _RouterRefreshListenable();
+  ref.listen(authProvider, (previous, next) {
+    refreshListenable.refresh();
+  });
+  ref.onDispose(refreshListenable.dispose);
 
   return GoRouter(
-    initialLocation: authState.isAuthenticated ? '/dashboard' : '/splash',
+    initialLocation: '/splash',
+    refreshListenable: refreshListenable,
     redirect: (context, state) {
-      final isAuth = authState.isAuthenticated;
-      final isSplash = state.matchedLocation == '/splash';
+      final isAuth = ref.read(authProvider).isAuthenticated;
       final isOnAuthRoute =
-          state.matchedLocation.startsWith('/home') ||
-          state.matchedLocation.startsWith('/login') ||
-          isSplash;
+          state.matchedLocation == '/splash' ||
+          state.matchedLocation == '/home' ||
+          state.matchedLocation == '/login' ||
+          state.matchedLocation.startsWith('/login/');
 
+      if (isAuth && isOnAuthRoute) {
+        return '/dashboard';
+      }
+      if (!isAuth && state.matchedLocation == '/home') {
+        return '/login/tenant';
+      }
       if (!isAuth && !isOnAuthRoute) return '/splash';
-      if (isAuth && (state.matchedLocation == '/home' || state.matchedLocation.startsWith('/login'))) return '/dashboard';
       return null;
     },
     routes: [
       // Splash dengan fade page
       GoRoute(
         path: '/splash',
-        pageBuilder: (context, state) => _buildFadePage(
-          key: state.pageKey,
-          child: const SplashScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            _buildFadePage(key: state.pageKey, child: const SplashScreen()),
       ),
 
       // Auth dengan fade page
       GoRoute(
         path: '/home',
-        pageBuilder: (context, state) => _buildFadePage(
-          key: state.pageKey,
-          child: const HomeScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            _buildFadePage(key: state.pageKey, child: const HomeScreen()),
       ),
+
+      // =======================================================================
+      // AUTHENTICATION ROUTES (PENANGANAN REDIRECT & EXTRA PAYLOAD)
+      // =======================================================================
+
+      // Alias /login -> Mengarah langsung ke Step 1 (Mencegah GoException)
+      GoRoute(path: '/login', redirect: (context, state) => '/login/tenant'),
+
+      // Step 1: Verification Workspace Tenant
       GoRoute(
         path: '/login/tenant',
         builder: (context, state) => const LoginStep1Screen(),
       ),
+
+      // Step 2: Credentials Login (MELEWATKAN EXTRA PAYLOAD TENANT INFO)
       GoRoute(
         path: '/login/credentials',
-        builder: (context, state) => const LoginStep2Screen(),
+        builder: (context, state) {
+          final tenantInfo = state.extra as TenantInfo?;
+          return LoginStep2Screen(tenantInfo: tenantInfo);
+        },
       ),
+
       GoRoute(
         path: '/notifications',
         pageBuilder: (context, state) => _buildFadePage(
@@ -195,7 +220,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // Keep existing links valid while the features live under the shell.
+      // Legacy Route Redirects
       GoRoute(
         path: '/transfer',
         redirect: (context, state) => '/more/transfer',
@@ -219,3 +244,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+class _RouterRefreshListenable extends ChangeNotifier {
+  void refresh() => notifyListeners();
+}

@@ -28,7 +28,9 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
 
   void _showQuickUmkmOpnameSheet() {
     final titleController = TextEditingController(text: 'Opname Closing Kasir');
-    final warehouseController = TextEditingController(text: 'Toko Cabang Dinoyo');
+    final warehouseController = TextEditingController(
+      text: 'Toko Cabang Dinoyo',
+    );
     final rackController = TextEditingController(text: 'Etalase Kasir Utama');
 
     showModalBottomSheet(
@@ -88,7 +90,10 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(ctx).pop(),
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -105,11 +110,17 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
               const SizedBox(height: 4),
               TextField(
                 controller: titleController,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: AppColors.border),
@@ -133,11 +144,17 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
               const SizedBox(height: 4),
               TextField(
                 controller: warehouseController,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: AppColors.border),
@@ -161,11 +178,17 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
               const SizedBox(height: 4),
               TextField(
                 controller: rackController,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: AppColors.border),
@@ -182,12 +205,19 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                 height: 46,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    final code = 'SOP-UMKM-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+                    final code =
+                        'SOP-UMKM-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
                     final newSession = OpnameSession(
                       sessionCode: code,
-                      title: titleController.text.trim().isEmpty ? 'Opname Toko Mandiri' : titleController.text.trim(),
-                      warehouseName: warehouseController.text.trim().isEmpty ? 'Toko Utama' : warehouseController.text.trim(),
-                      zone: rackController.text.trim().isEmpty ? 'Etalase Toko' : rackController.text.trim(),
+                      title: titleController.text.trim().isEmpty
+                          ? 'Opname Toko Mandiri'
+                          : titleController.text.trim(),
+                      warehouseName: warehouseController.text.trim().isEmpty
+                          ? 'Toko Utama'
+                          : warehouseController.text.trim(),
+                      zone: rackController.text.trim().isEmpty
+                          ? 'Etalase Toko'
+                          : rackController.text.trim(),
                       status: OpnameSessionStatus.active,
                       assignedOperator: 'Kasir / Staf Toko',
                       createdAt: 'Hari ini',
@@ -217,7 +247,9 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                       ],
                     );
 
-                    ref.read(opnameRepositoryProvider.notifier).addQuickSession(newSession);
+                    ref
+                        .read(opnameRepositoryProvider.notifier)
+                        .addQuickSession(newSession);
                     Navigator.of(ctx).pop();
                     OmniSnackbar.show(
                       context,
@@ -235,7 +267,9 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -252,13 +286,15 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
     final stats = ref.watch(opnameStatsProvider);
 
     final filteredSessions = sessions.where((s) {
-      final matchesSearch = _searchQuery.isEmpty ||
+      final matchesSearch =
+          _searchQuery.isEmpty ||
           s.sessionCode.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           s.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           s.warehouseName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           s.zone.toLowerCase().contains(_searchQuery.toLowerCase());
 
-      final matchesStatus = _selectedStatusFilter == null || s.status == _selectedStatusFilter;
+      final matchesStatus =
+          _selectedStatusFilter == null || s.status == _selectedStatusFilter;
 
       return matchesSearch && matchesStatus;
     }).toList();
@@ -303,7 +339,7 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                       },
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        height: 44,
+                        height: 48,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         decoration: BoxDecoration(
                           color: AppColors.primary,
@@ -319,7 +355,11 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.qr_code_scanner_rounded, size: 18, color: Colors.white),
+                            Icon(
+                              Icons.qr_code_scanner_rounded,
+                              size: 18,
+                              color: Colors.white,
+                            ),
                             SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -345,7 +385,7 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                       onTap: _showQuickUmkmOpnameSheet,
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        height: 44,
+                        height: 48,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -355,7 +395,11 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_rounded, size: 18, color: AppColors.primary),
+                            Icon(
+                              Icons.add_rounded,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
                             SizedBox(width: 4),
                             Flexible(
                               child: Text(
@@ -414,10 +458,12 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
               if (filteredSessions.isEmpty)
                 _buildEmptyState(hasAnySessions: sessions.isNotEmpty)
               else
-                ...filteredSessions.map((session) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildSessionCard(session),
-                    )),
+                ...filteredSessions.map(
+                  (session) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildSessionCard(session),
+                  ),
+                ),
             ],
           ),
         ),
@@ -495,11 +541,23 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
             ),
             child: Row(
               children: [
-                _buildStatPill('Sesi Aktif', '${stats.activeSessions}', AppColors.primary),
+                _buildStatPill(
+                  'Sesi Aktif',
+                  '${stats.activeSessions}',
+                  AppColors.primary,
+                ),
                 Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
-                _buildStatPill('Item Dihitung', '${stats.totalItemsCounted}', AppColors.warning),
+                _buildStatPill(
+                  'Item Dihitung',
+                  '${stats.totalItemsCounted}',
+                  AppColors.warning,
+                ),
                 Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
-                _buildStatPill('Selisih Fisik', '${stats.discrepancyCount}', AppColors.danger),
+                _buildStatPill(
+                  'Selisih Fisik',
+                  '${stats.discrepancyCount}',
+                  AppColors.danger,
+                ),
               ],
             ),
           ),
@@ -557,10 +615,18 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
         decoration: InputDecoration(
           hintText: 'Cari kode sesi, nama audit, atau gudang...',
           hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-          prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textMuted),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: AppColors.textMuted,
+          ),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear_rounded, size: 18, color: AppColors.textMuted),
+                  icon: const Icon(
+                    Icons.clear_rounded,
+                    size: 18,
+                    color: AppColors.textMuted,
+                  ),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
@@ -588,19 +654,26 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
           _buildChip(
             label: 'Aktif Menghitung',
             isSelected: _selectedStatusFilter == OpnameSessionStatus.active,
-            onTap: () => setState(() => _selectedStatusFilter = OpnameSessionStatus.active),
+            onTap: () => setState(
+              () => _selectedStatusFilter = OpnameSessionStatus.active,
+            ),
           ),
           const SizedBox(width: 8),
           _buildChip(
             label: 'Rekonsiliasi Web',
-            isSelected: _selectedStatusFilter == OpnameSessionStatus.reconciling,
-            onTap: () => setState(() => _selectedStatusFilter = OpnameSessionStatus.reconciling),
+            isSelected:
+                _selectedStatusFilter == OpnameSessionStatus.reconciling,
+            onTap: () => setState(
+              () => _selectedStatusFilter = OpnameSessionStatus.reconciling,
+            ),
           ),
           const SizedBox(width: 8),
           _buildChip(
             label: 'Selesai',
             isSelected: _selectedStatusFilter == OpnameSessionStatus.completed,
-            onTap: () => setState(() => _selectedStatusFilter = OpnameSessionStatus.completed),
+            onTap: () => setState(
+              () => _selectedStatusFilter = OpnameSessionStatus.completed,
+            ),
           ),
         ],
       ),
@@ -658,10 +731,7 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
           child: Container(
             decoration: BoxDecoration(
               border: Border(
-                left: BorderSide(
-                  color: session.status.color,
-                  width: 4,
-                ),
+                left: BorderSide(color: session.status.color, width: 4),
               ),
             ),
             padding: const EdgeInsets.all(14),
@@ -691,7 +761,10 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                           if (session.isBlindCount) ...[
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF1F5F9),
                                 borderRadius: BorderRadius.circular(4),
@@ -712,7 +785,10 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: session.status.bg,
                         borderRadius: BorderRadius.circular(6),
@@ -747,7 +823,11 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                 // Warehouse & Zone
                 Row(
                   children: [
-                    const Icon(Icons.warehouse_outlined, size: 14, color: AppColors.textMuted),
+                    const Icon(
+                      Icons.warehouse_outlined,
+                      size: 14,
+                      color: AppColors.textMuted,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -799,7 +879,9 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                         minHeight: 6,
                         backgroundColor: const Color(0xFFE2E8F0),
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          session.progress >= 1.0 ? AppColors.success : AppColors.primary,
+                          session.progress >= 1.0
+                              ? AppColors.success
+                              : AppColors.primary,
                         ),
                       ),
                     ),
@@ -813,7 +895,11 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.person_outline_rounded, size: 13, color: AppColors.textMuted),
+                        const Icon(
+                          Icons.person_outline_rounded,
+                          size: 13,
+                          color: AppColors.textMuted,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           session.assignedOperator,
@@ -837,7 +923,11 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                           ),
                         ),
                         const SizedBox(width: 2),
-                        const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.primary),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
                       ],
                     ),
                   ],
@@ -916,7 +1006,10 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -929,7 +1022,10 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primaryBorder),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -951,7 +1047,11 @@ class _OpnameListScreenState extends ConsumerState<OpnameListScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted),
+          const Icon(
+            Icons.search_off_rounded,
+            size: 48,
+            color: AppColors.textMuted,
+          ),
           const SizedBox(height: 12),
           const Text(
             'Tidak Ada Sesi Opname Ditemukan',

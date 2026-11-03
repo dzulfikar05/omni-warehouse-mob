@@ -28,7 +28,8 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
 
   void _showAdhocInboundDialog() {
     final codeController = TextEditingController(
-      text: 'IN-ADHOC-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+      text:
+          'IN-ADHOC-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
     );
     final supplierController = TextEditingController();
     final qtyController = TextEditingController(text: '50');
@@ -91,7 +92,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(ctx).pop(),
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -118,14 +122,21 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: const Color(0xFFEFF6FF),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.primaryBorder),
+                    borderSide: const BorderSide(
+                      color: AppColors.primaryBorder,
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.primaryBorder),
+                    borderSide: const BorderSide(
+                      color: AppColors.primaryBorder,
+                    ),
                   ),
                 ),
               ),
@@ -144,8 +155,14 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                 controller: supplierController,
                 decoration: InputDecoration(
                   hintText: 'Contoh: Toko Grosir Elektronik Jaya',
-                  hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  hintStyle: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: AppColors.border),
@@ -173,10 +190,15 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                           controller: qtyController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
                             ),
                           ),
                         ),
@@ -201,10 +223,15 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                         TextField(
                           controller: rackController,
                           decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
                             ),
                           ),
                         ),
@@ -223,12 +250,19 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.shield_outlined, size: 16, color: AppColors.textMuted),
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 16,
+                      color: AppColors.textMuted,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Harga modal (HPP) disinkronkan otomatis dari master produk web untuk menjaga akurasi akuntansi.',
-                        style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
                   ],
@@ -266,11 +300,14 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                       ],
                     );
 
-                    ref.read(inboundRepositoryProvider.notifier).addAdhocManifest(newManifest);
+                    ref
+                        .read(inboundRepositoryProvider.notifier)
+                        .addAdhocManifest(newManifest);
                     Navigator.of(ctx).pop();
                     OmniSnackbar.show(
                       context,
-                      message: 'Sesi Ad-hoc ${newManifest.code} berhasil dibuat!',
+                      message:
+                          'Sesi Ad-hoc ${newManifest.code} berhasil dibuat!',
                       icon: Icons.check_circle_rounded,
                     );
                     context.go('/inbound/${newManifest.code}');
@@ -303,12 +340,15 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
     final stats = ref.watch(inboundStatsProvider);
 
     final filteredManifests = manifests.where((m) {
-      final matchesSearch = _searchQuery.isEmpty ||
+      final matchesSearch =
+          _searchQuery.isEmpty ||
           m.code.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           m.supplier.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          (m.truckPlate?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
+          (m.truckPlate?.toLowerCase().contains(_searchQuery.toLowerCase()) ??
+              false);
 
-      final matchesStatus = _selectedStatusFilter == null || m.status == _selectedStatusFilter;
+      final matchesStatus =
+          _selectedStatusFilter == null || m.status == _selectedStatusFilter;
 
       return matchesSearch && matchesStatus;
     }).toList();
@@ -346,7 +386,7 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                       },
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        height: 44,
+                        height: 48,
                         decoration: BoxDecoration(
                           color: AppColors.primary,
                           borderRadius: BorderRadius.circular(12),
@@ -361,7 +401,11 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.qr_code_scanner_rounded, size: 18, color: Colors.white),
+                            Icon(
+                              Icons.qr_code_scanner_rounded,
+                              size: 18,
+                              color: Colors.white,
+                            ),
                             SizedBox(width: 8),
                             Text(
                               'Scan Surat Jalan',
@@ -383,7 +427,7 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                       onTap: _showAdhocInboundDialog,
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        height: 44,
+                        height: 48,
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
@@ -392,7 +436,11 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_rounded, size: 18, color: AppColors.primary),
+                            Icon(
+                              Icons.add_rounded,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
                             SizedBox(width: 4),
                             Text(
                               '+ Ad-hoc',
@@ -442,10 +490,12 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
               if (filteredManifests.isEmpty)
                 _buildEmptyState(hasAnyManifests: manifests.isNotEmpty)
               else
-                ...filteredManifests.map((manifest) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildManifestCard(manifest),
-                    )),
+                ...filteredManifests.map(
+                  (manifest) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildManifestCard(manifest),
+                  ),
+                ),
             ],
           ),
         ),
@@ -525,11 +575,23 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
             ),
             child: Row(
               children: [
-                _buildStatPill('PO Hari Ini', '${stats.todayTotal}', const Color(0xFF004AC6)),
+                _buildStatPill(
+                  'PO Hari Ini',
+                  '${stats.todayTotal}',
+                  const Color(0xFF004AC6),
+                ),
                 Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
-                _buildStatPill('Dalam Proses', '${stats.inProgress}', const Color(0xFFD97706)),
+                _buildStatPill(
+                  'Dalam Proses',
+                  '${stats.inProgress}',
+                  const Color(0xFFD97706),
+                ),
                 Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
-                _buildStatPill('Selesai', '${stats.completed}', const Color(0xFF059669)),
+                _buildStatPill(
+                  'Selesai',
+                  '${stats.completed}',
+                  const Color(0xFF059669),
+                ),
               ],
             ),
           ),
@@ -580,10 +642,18 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
         decoration: InputDecoration(
           hintText: 'Cari No. PO, Supplier, Plat Truk...',
           hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-          prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textMuted),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: AppColors.textMuted,
+          ),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear_rounded, size: 18, color: AppColors.textMuted),
+                  icon: const Icon(
+                    Icons.clear_rounded,
+                    size: 18,
+                    color: AppColors.textMuted,
+                  ),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
@@ -616,7 +686,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
               onTap: () => setState(() => _selectedStatusFilter = filter.$1),
               borderRadius: BorderRadius.circular(999),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.primary : Colors.white,
                   borderRadius: BorderRadius.circular(999),
@@ -681,10 +754,7 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Left Vertical Color Bar
-              Container(
-                width: 5,
-                color: accentColor,
-              ),
+              Container(width: 5, color: accentColor),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -709,7 +779,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                               if (manifest.isAdhoc) ...[
                                 const SizedBox(width: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 1,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF1F5F9),
                                     borderRadius: BorderRadius.circular(4),
@@ -729,7 +802,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                             ],
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: manifest.status.bg,
                               borderRadius: BorderRadius.circular(999),
@@ -752,7 +828,11 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                       // Supplier & Dock Bay
                       Row(
                         children: [
-                          const Icon(Icons.business_rounded, size: 14, color: AppColors.textSecondary),
+                          const Icon(
+                            Icons.business_rounded,
+                            size: 14,
+                            color: AppColors.textSecondary,
+                          ),
                           const SizedBox(width: 5),
                           Expanded(
                             child: Text(
@@ -767,7 +847,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(6),
@@ -789,14 +872,21 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
 
                       // Unit Pill Strip
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEFF4FF),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.inventory_2_outlined, size: 14, color: Color(0xFF004AC6)),
+                            const Icon(
+                              Icons.inventory_2_outlined,
+                              size: 14,
+                              color: Color(0xFF004AC6),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               '${manifest.totalUnits} Units Total',
@@ -854,7 +944,9 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                           valueColor: AlwaysStoppedAnimation<Color>(
                             isClosed
                                 ? AppColors.success
-                                : (isReceiving ? const Color(0xFFF59E0B) : AppColors.primary),
+                                : (isReceiving
+                                      ? const Color(0xFFF59E0B)
+                                      : AppColors.primary),
                           ),
                         ),
                       ),
@@ -866,14 +958,18 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.schedule_rounded, size: 13, color: AppColors.textMuted),
+                              const Icon(
+                                Icons.schedule_rounded,
+                                size: 13,
+                                color: AppColors.textMuted,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 isClosed
                                     ? 'Selesai: ${manifest.completedAt ?? 'Tuntas'}'
                                     : (manifest.startedAt != null
-                                        ? 'Mulai: ${manifest.startedAt}'
-                                        : 'Siap Dibongkar'),
+                                          ? 'Mulai: ${manifest.startedAt}'
+                                          : 'Siap Dibongkar'),
                                 style: const TextStyle(
                                   fontSize: 11,
                                   color: AppColors.textSecondary,
@@ -888,11 +984,17 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               height: 34,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
                               decoration: BoxDecoration(
-                                color: isClosed ? const Color(0xFFF1F5F9) : AppColors.primary,
+                                color: isClosed
+                                    ? const Color(0xFFF1F5F9)
+                                    : AppColors.primary,
                                 borderRadius: BorderRadius.circular(8),
-                                border: isClosed ? Border.all(color: AppColors.border) : null,
+                                border: isClosed
+                                    ? Border.all(color: AppColors.border)
+                                    : null,
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -901,20 +1003,26 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                                     isClosed
                                         ? Icons.visibility_outlined
                                         : (isReceiving
-                                            ? Icons.qr_code_scanner_rounded
-                                            : Icons.play_arrow_rounded),
+                                              ? Icons.qr_code_scanner_rounded
+                                              : Icons.play_arrow_rounded),
                                     size: 15,
-                                    color: isClosed ? AppColors.textPrimary : Colors.white,
+                                    color: isClosed
+                                        ? AppColors.textPrimary
+                                        : Colors.white,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
                                     isClosed
                                         ? 'Lihat Detail'
-                                        : (isReceiving ? 'Lanjut Scan PO' : 'Mulai Scan'),
+                                        : (isReceiving
+                                              ? 'Lanjut Scan PO'
+                                              : 'Mulai Scan'),
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
-                                      color: isClosed ? AppColors.textPrimary : Colors.white,
+                                      color: isClosed
+                                          ? AppColors.textPrimary
+                                          : Colors.white,
                                     ),
                                   ),
                                 ],
@@ -1000,7 +1108,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -1013,7 +1124,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primaryBorder),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -1035,7 +1149,11 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted),
+          const Icon(
+            Icons.search_off_rounded,
+            size: 48,
+            color: AppColors.textMuted,
+          ),
           const SizedBox(height: 12),
           const Text(
             'Tidak Ada Manifes Inbound Ditemukan',

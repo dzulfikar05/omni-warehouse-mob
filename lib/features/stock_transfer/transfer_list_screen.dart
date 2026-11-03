@@ -82,7 +82,10 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: item.status.bg,
                     borderRadius: BorderRadius.circular(8),
@@ -128,15 +131,22 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                   onPressed: () {
                     ref
                         .read(transferRepositoryProvider.notifier)
-                        .updateTransferStatus(item.id, TransferStatus.completed);
+                        .updateTransferStatus(
+                          item.id,
+                          TransferStatus.completed,
+                        );
                     Navigator.of(ctx).pop();
                     OmniSnackbar.show(
                       context,
-                      message: 'Transfer ${item.referenceNumber} dikonfirmasi selesai diterima!',
+                      message:
+                          'Transfer ${item.referenceNumber} dikonfirmasi selesai diterima!',
                       icon: Icons.check_circle_rounded,
                     );
                   },
-                  icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                  icon: const Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 18,
+                  ),
                   label: const Text(
                     'Konfirmasi Penerimaan Cabang',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
@@ -145,7 +155,9 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -153,12 +165,14 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
             ],
             SizedBox(
               width: double.infinity,
-              height: 44,
+              height: 48,
               child: OutlinedButton(
                 onPressed: () => Navigator.of(ctx).pop(),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: const Text(
                   'Tutup',
@@ -212,15 +226,22 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
     final stats = ref.watch(transferStatsProvider);
 
     final filteredList = transfers.where((item) {
-      final matchesSearch = _searchQuery.isEmpty ||
-          item.referenceNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      final matchesSearch =
+          _searchQuery.isEmpty ||
+          item.referenceNumber.toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          ) ||
           item.sku.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           item.productName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          item.fromLocation.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          item.fromLocation.toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          ) ||
           item.toLocation.toLowerCase().contains(_searchQuery.toLowerCase());
 
-      final matchesType = _selectedTypeFilter == null || item.type == _selectedTypeFilter;
-      final matchesStatus = _selectedStatusFilter == null || item.status == _selectedStatusFilter;
+      final matchesType =
+          _selectedTypeFilter == null || item.type == _selectedTypeFilter;
+      final matchesStatus =
+          _selectedStatusFilter == null || item.status == _selectedStatusFilter;
 
       return matchesSearch && matchesType && matchesStatus;
     }).toList();
@@ -255,7 +276,7 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                       onTap: () => context.go('/more/transfer/scan'),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        height: 44,
+                        height: 48,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         decoration: BoxDecoration(
                           color: AppColors.primary,
@@ -271,7 +292,11 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.qr_code_scanner_rounded, size: 18, color: Colors.white),
+                            Icon(
+                              Icons.qr_code_scanner_rounded,
+                              size: 18,
+                              color: Colors.white,
+                            ),
                             SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -307,7 +332,11 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_rounded, size: 18, color: AppColors.primary),
+                            Icon(
+                              Icons.add_rounded,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
                             SizedBox(width: 4),
                             Flexible(
                               child: Text(
@@ -366,10 +395,12 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
               if (filteredList.isEmpty)
                 _buildEmptyState(hasAnyTransfers: transfers.isNotEmpty)
               else
-                ...filteredList.map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildTransferCard(item),
-                    )),
+                ...filteredList.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildTransferCard(item),
+                  ),
+                ),
             ],
           ),
         ),
@@ -447,11 +478,23 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
             ),
             child: Row(
               children: [
-                _buildStatPill('Total Mutasi', '${stats.todayTotal}', AppColors.primary),
+                _buildStatPill(
+                  'Total Mutasi',
+                  '${stats.todayTotal}',
+                  AppColors.primary,
+                ),
                 Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
-                _buildStatPill('Dalam Proses', '${stats.inTransit}', AppColors.warning),
+                _buildStatPill(
+                  'Dalam Proses',
+                  '${stats.inTransit}',
+                  AppColors.warning,
+                ),
                 Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
-                _buildStatPill('Selesai', '${stats.completed}', AppColors.success),
+                _buildStatPill(
+                  'Selesai',
+                  '${stats.completed}',
+                  AppColors.success,
+                ),
               ],
             ),
           ),
@@ -509,10 +552,18 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
         decoration: InputDecoration(
           hintText: 'Cari no ref, SKU, produk, atau rak...',
           hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-          prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textMuted),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: AppColors.textMuted,
+          ),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear_rounded, size: 18, color: AppColors.textMuted),
+                  icon: const Icon(
+                    Icons.clear_rounded,
+                    size: 18,
+                    color: AppColors.textMuted,
+                  ),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
@@ -540,21 +591,26 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
           _buildChip(
             label: 'Pindah Rak',
             isSelected: _selectedTypeFilter == TransferType.binToBin,
-            onTap: () => setState(() => _selectedTypeFilter = TransferType.binToBin),
+            onTap: () =>
+                setState(() => _selectedTypeFilter = TransferType.binToBin),
             activeColor: const Color(0xFFD97706),
           ),
           const SizedBox(width: 8),
           _buildChip(
             label: 'Antar Gudang',
             isSelected: _selectedTypeFilter == TransferType.interWarehouse,
-            onTap: () => setState(() => _selectedTypeFilter = TransferType.interWarehouse),
+            onTap: () => setState(
+              () => _selectedTypeFilter = TransferType.interWarehouse,
+            ),
             activeColor: AppColors.primary,
           ),
           const SizedBox(width: 8),
           _buildChip(
             label: 'Display Toko',
             isSelected: _selectedTypeFilter == TransferType.replenishment,
-            onTap: () => setState(() => _selectedTypeFilter = TransferType.replenishment),
+            onTap: () => setState(
+              () => _selectedTypeFilter = TransferType.replenishment,
+            ),
             activeColor: const Color(0xFF7C3AED),
           ),
         ],
@@ -614,10 +670,7 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
           child: Container(
             decoration: BoxDecoration(
               border: Border(
-                left: BorderSide(
-                  color: item.type.color,
-                  width: 4,
-                ),
+                left: BorderSide(color: item.type.color, width: 4),
               ),
             ),
             padding: const EdgeInsets.all(14),
@@ -646,7 +699,10 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                           ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: item.type.bg,
                               borderRadius: BorderRadius.circular(6),
@@ -666,7 +722,10 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: item.status.bg,
                         borderRadius: BorderRadius.circular(6),
@@ -702,7 +761,10 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(4),
@@ -733,7 +795,10 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
 
                 // Route Visualizer (Origin -> Destination)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(8),
@@ -741,7 +806,11 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 14, color: AppColors.textMuted),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 14,
+                        color: AppColors.textMuted,
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -757,9 +826,17 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                       ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 6),
-                        child: Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.primary),
+                        child: Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
                       ),
-                      const Icon(Icons.flag_outlined, size: 14, color: AppColors.primary),
+                      const Icon(
+                        Icons.flag_outlined,
+                        size: 14,
+                        color: AppColors.primary,
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -784,7 +861,11 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.person_outline_rounded, size: 13, color: AppColors.textMuted),
+                        const Icon(
+                          Icons.person_outline_rounded,
+                          size: 13,
+                          color: AppColors.textMuted,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           item.operatorName,
@@ -878,7 +959,10 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -891,7 +975,10 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primaryBorder),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -913,7 +1000,11 @@ class _TransferListScreenState extends ConsumerState<TransferListScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted),
+          const Icon(
+            Icons.search_off_rounded,
+            size: 48,
+            color: AppColors.textMuted,
+          ),
           const SizedBox(height: 12),
           const Text(
             'Tidak Ada Mutasi Ditemukan',

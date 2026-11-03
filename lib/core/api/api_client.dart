@@ -1,7 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:io';
 
 import '../auth/secure_storage.dart';
 import 'api_exception.dart';
@@ -97,26 +95,21 @@ class ApiClient {
   }
 }
 
-// =============================================================================
-// KONFIGURASI BASE URL PORT 80
-// =============================================================================
-
-/// IP Laptop berdasarkan ipconfig Wi-Fi kamu
-const String _kLaptopIp = 'localhost';
-
-/// Setel 'true' jika testing menggunakan HP FISIK / Handheld Gudang via Wi-Fi.
-/// Setel 'false' jika testing menggunakan ANDROID EMULATOR / IOS SIMULATOR.
-const bool _usePhysicalDevice = true; 
-
 String _resolveBaseUrl() {
-  if (_usePhysicalDevice) {
-    // Port 80 tidak perlu dituliskan port-nya pada URL
-    return 'http://$_kLaptopIp/api';
-  } else {
-    if (kIsWeb) return 'http://localhost/api';
-    if (Platform.isAndroid) return 'http://10.0.2.2/api';
-    return 'http://127.0.0.1/api';
+  const baseUrl = String.fromEnvironment('API_BASE_URL');
+  if (baseUrl.isEmpty) {
+    throw StateError(
+      'API_BASE_URL belum dikonfigurasi. '
+      'Jalankan aplikasi dengan --dart-define-from-file=.env.json.',
+    );
   }
+
+  final uri = Uri.tryParse(baseUrl);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    throw StateError('API_BASE_URL harus berupa URL absolut yang valid.');
+  }
+
+  return baseUrl;
 }
 
 final baseUrlProvider = StateProvider<String>((ref) => _resolveBaseUrl());

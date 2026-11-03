@@ -1,19 +1,35 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Wrapper untuk flutter_secure_storage.
-/// Semua key ada di sini — tidak ada magic string di luar file ini.
 class SecureStorage {
   SecureStorage._();
   static final SecureStorage instance = SecureStorage._();
 
   final _storage = const FlutterSecureStorage();
 
-  static const _keyToken = 'auth_token';
-  static const _keyTenantSlug = 'tenant_slug';
-  static const _keyTenantName = 'tenant_name';
-  static const _keyUserName = 'user_name';
-  static const _keyUserRole = 'user_role';
+  static const _kToken = 'auth_token';
+  static const _kTenantSlug = 'tenant_slug';
+  static const _kTenantName = 'tenant_name';
+  static const _kUserName = 'user_name';
+  static const _kUserRole = 'user_role';
 
+  // --- PRIMITIVE GETTERS & SETTERS ---
+  Future<void> saveToken(String token) async =>
+      await _storage.write(key: _kToken, value: token);
+  Future<String?> getToken() async => await _storage.read(key: _kToken);
+
+  Future<void> saveTenant({required String slug, required String name}) async {
+    await _storage.write(key: _kTenantSlug, value: slug);
+    await _storage.write(key: _kTenantName, value: name);
+  }
+
+  Future<String?> getTenantSlug() async =>
+      await _storage.read(key: _kTenantSlug);
+  Future<String?> getTenantName() async =>
+      await _storage.read(key: _kTenantName);
+
+  // --- EXTENSION SESSION METHODS (RESOLVING LINTER ERRORS) ---
+
+  /// Menyimpan seluruh kredensial sesi setelah login berhasil
   Future<void> saveSession({
     required String token,
     required String tenantSlug,
@@ -21,22 +37,20 @@ class SecureStorage {
     required String userName,
     required String userRole,
   }) async {
-    await Future.wait([
-      _storage.write(key: _keyToken, value: token),
-      _storage.write(key: _keyTenantSlug, value: tenantSlug),
-      _storage.write(key: _keyTenantName, value: tenantName),
-      _storage.write(key: _keyUserName, value: userName),
-      _storage.write(key: _keyUserRole, value: userRole),
-    ]);
+    await saveToken(token);
+    await saveTenant(slug: tenantSlug, name: tenantName);
+    await _storage.write(key: _kUserName, value: userName);
+    await _storage.write(key: _kUserRole, value: userRole);
   }
 
-  Future<String?> getToken() => _storage.read(key: _keyToken);
-  Future<String?> getTenantSlug() => _storage.read(key: _keyTenantSlug);
-  Future<String?> getTenantName() => _storage.read(key: _keyTenantName);
-  Future<String?> getUserName() => _storage.read(key: _keyUserName);
-  Future<String?> getUserRole() => _storage.read(key: _keyUserRole);
+  Future<String?> getUserName() async => await _storage.read(key: _kUserName);
 
-  Future<bool> hasSession() async => (await getToken()) != null;
+  Future<String?> getUserRole() async => await _storage.read(key: _kUserRole);
 
-  Future<void> clearSession() => _storage.deleteAll();
+  /// Menghapus seluruh sesi dari storage fisik saat logout
+  Future<void> clearSession() async {
+    await _storage.deleteAll();
+  }
+
+  Future<void> clearAll() async => await clearSession();
 }

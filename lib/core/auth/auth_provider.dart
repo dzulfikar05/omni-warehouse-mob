@@ -4,26 +4,39 @@ import 'secure_storage.dart';
 
 /// Global auth provider — satu-satunya sumber kebenaran untuk status login.
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
-  (ref) => AuthNotifier(),
+  (ref) => AuthNotifier()..initialize(),
 );
 
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier() : super(const AuthState());
 
-  /// Panggil saat app start — cek apakah ada session tersimpan.
+  /// Panggil saat app start — cek apakah ada session tersimpan di SecureStorage.
   Future<void> initialize() async {
     final storage = SecureStorage.instance;
-    if (await storage.hasSession()) {
-      state = state.copyWith(
-        token: await storage.getToken(),
-        tenantSlug: await storage.getTenantSlug(),
-        tenantName: await storage.getTenantName(),
-        userName: await storage.getUserName(),
-        userRole: await storage.getUserRole(),
+    final token = await storage.getToken();
+
+    if (token != null && token.isNotEmpty) {
+      final tenantSlug = await storage.getTenantSlug();
+      final tenantName = await storage.getTenantName();
+      final userName = await storage.getUserName();
+      final userRole = await storage.getUserRole();
+
+      state = AuthState(
+        token: token,
+        tenantSlug: tenantSlug,
+        tenantName: tenantName,
+        userName: userName,
+        userRole: userRole,
       );
     }
   }
 
+  /// Panggil pada Step 1: Simpan tenant info hasil verifikasi API ke State
+  void setTenant({required String tenantSlug, required String tenantName}) {
+    state = state.copyWith(tenantSlug: tenantSlug, tenantName: tenantName);
+  }
+
+  /// Panggil pada Step 2: Simpan seluruh sesi login ke Memori dan SecureStorage
   Future<void> saveSession({
     required String token,
     required String tenantSlug,
@@ -31,13 +44,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String userName,
     required String userRole,
   }) async {
-    await SecureStorage.instance.saveSession(
-      token: token,
-      tenantSlug: tenantSlug,
-      tenantName: tenantName,
-      userName: userName,
-      userRole: userRole,
-    );
     state = AuthState(
       token: token,
       tenantSlug: tenantSlug,
@@ -45,20 +51,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       userName: userName,
       userRole: userRole,
     );
-  }
 
-  void enterDemoSession() {
-    state = const AuthState(
-      token: 'demo-session',
-      tenantSlug: 'naratel-logistics',
-      tenantName: 'Naratel Logistics',
-      userName: 'Budi',
-      userRole: 'Operator',
+    await SecureStorage.instance.saveSession(
+      token: token,
+      tenantSlug: tenantSlug,
+      tenantName: tenantName,
+      userName: userName,
+      userRole: userRole,
     );
   }
 
   Future<void> logout() async {
-    await SecureStorage.instance.clearSession();
     state = const AuthState();
+    await SecureStorage.instance.clearSession();
   }
 }

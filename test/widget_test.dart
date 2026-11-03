@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:omni_warehouse_mob/features/auth/auth_model.dart';
 import 'package:omni_warehouse_mob/features/auth/home_screen.dart';
 import 'package:omni_warehouse_mob/features/auth/login_step1_screen.dart';
 import 'package:omni_warehouse_mob/features/auth/login_step2_screen.dart';
@@ -23,11 +25,19 @@ void main() {
   });
 
   testWidgets('credentials screen shows login fields', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: LoginStep2Screen()));
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: LoginStep2Screen(
+            tenantInfo: TenantInfo(id: 1, name: 'Test Warehouse', slug: 'test'),
+          ),
+        ),
+      ),
+    );
 
     expect(find.text('Login Operator Gudang'), findsOneWidget);
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
-    expect(find.text('Masuk ke Dashboard Demo'), findsOneWidget);
+    expect(find.text('Masuk ke Dashboard'), findsOneWidget);
   });
 }

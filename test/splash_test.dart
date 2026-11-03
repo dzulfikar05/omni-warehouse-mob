@@ -16,9 +16,9 @@ void main() {
           builder: (context, state) => const SplashScreen(),
         ),
         GoRoute(
-          path: '/home',
+          path: '/login/tenant',
           builder: (context, state) => const Scaffold(
-            body: Center(child: Text('Home Destination')),
+            body: Center(child: Text('Step 1 Destination')),
           ),
         ),
       ],
@@ -47,6 +47,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
 
-    expect(find.text('Home Destination'), findsOneWidget);
+    expect(find.text('Step 1 Destination'), findsOneWidget);
   });
 }

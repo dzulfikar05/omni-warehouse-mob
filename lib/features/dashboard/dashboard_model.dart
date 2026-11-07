@@ -54,6 +54,7 @@ class DashboardKpi {
 class DashboardTaskItem {
   final String id;
   final String type; // 'inbound' | 'outbound' | 'transfer' | 'opname'
+  final String status; // 'pending' | 'receiving' | 'picking' | 'packing' | 'completed'
   final String badgeLabel;
   final String code;
   final String title;
@@ -66,6 +67,7 @@ class DashboardTaskItem {
   const DashboardTaskItem({
     required this.id,
     required this.type,
+    this.status = 'pending',
     required this.badgeLabel,
     required this.code,
     required this.title,
@@ -76,6 +78,13 @@ class DashboardTaskItem {
     required this.route,
   });
 
+  bool get isCompleted =>
+      status.toLowerCase() == 'completed' ||
+      status.toLowerCase() == 'selesai' ||
+      status.toLowerCase() == 'terkirim' ||
+      badgeLabel == 'SELESAI' ||
+      badgeLabel == 'TERKIRIM';
+
   double get progressPercent =>
       progressTotal > 0 ? (progressCurrent / progressTotal).clamp(0.0, 1.0) : 0.0;
 
@@ -83,6 +92,7 @@ class DashboardTaskItem {
     return DashboardTaskItem(
       id: json['id']?.toString() ?? '',
       type: json['type']?.toString() ?? 'inbound',
+      status: json['status']?.toString() ?? 'pending',
       badgeLabel: json['badge_label']?.toString() ?? 'TASK',
       code: json['code']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
@@ -97,6 +107,7 @@ class DashboardTaskItem {
   Map<String, dynamic> toJson() => {
     'id': id,
     'type': type,
+    'status': status,
     'badge_label': badgeLabel,
     'code': code,
     'title': title,

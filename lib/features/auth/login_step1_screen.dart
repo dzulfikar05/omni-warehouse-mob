@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../core/api/api_client.dart';
+import '../../shared/widgets/server_config_dialog.dart';
 import 'auth_repository.dart';
 
 class LoginStep1Screen extends ConsumerStatefulWidget {
@@ -16,7 +19,6 @@ class LoginStep1Screen extends ConsumerStatefulWidget {
 }
 
 class _LoginStep1ScreenState extends ConsumerState<LoginStep1Screen> {
-  // Input diawali kosong agar operator memasukkan ID Tenant yang relevan
   final _tenantController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
@@ -47,7 +49,9 @@ class _LoginStep1ScreenState extends ConsumerState<LoginStep1Screen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.message),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     } finally {
@@ -61,122 +65,230 @@ class _LoginStep1ScreenState extends ConsumerState<LoginStep1Screen> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          const Positioned(
-            left: -107,
-            top: -16,
-            child: BlurCircle(color: Color(0x4DDBE1FF)),
+          Positioned(
+            left: -80,
+            top: -40,
+            child: BlurCircle(
+              color: AppColors.primary.withValues(alpha: 0.06),
+              size: 260,
+            ),
           ),
-          const Positioned(
-            right: -105,
-            bottom: 38,
-            child: BlurCircle(color: Color(0x66D9E2FD)),
+          Positioned(
+            right: -80,
+            bottom: -20,
+            child: BlurCircle(
+              color: AppColors.primaryLight.withValues(alpha: 0.5),
+              size: 240,
+            ),
           ),
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
                       minHeight: constraints.maxHeight,
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 34),
-                      child: IntrinsicHeight(
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const SizedBox(height: 24),
-                              _brandChip(),
-                              const SizedBox(height: 32),
-                              _logoContainer(),
-                              const SizedBox(height: 32),
-                              const Text(
-                                'Login Operator Gudang',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: -0.6,
-                                  color: AppColors.textPrimary,
-                                  fontFamily: 'PlusJakartaSans',
-                                ),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 12),
+
+                            // Brand Ecosystem Pill
+                            Center(child: _buildBrandChip()),
+                            const SizedBox(height: 24),
+
+                            // Logo Icon
+                            Center(child: _buildLogoContainer()),
+                            const SizedBox(height: 20),
+
+                            // Title & Subtitle
+                            const Text(
+                              'OmniWarehouse WMS',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                                letterSpacing: -0.4,
+                                fontFamily: 'PlusJakartaSans',
                               ),
-                              const SizedBox(height: 34),
-                              _inputLabel(),
-                              const SizedBox(height: 10),
-                              TextFormField(
-                                controller: _tenantController,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Color(0xFF565E74),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Masukkan Workspace ID untuk menghubungkan gudang Anda',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                                color: AppColors.textSecondary,
+                                fontFamily: 'Inter',
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+
+                            // Field Label
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.domain_outlined,
+                                  size: 15,
+                                  color: AppColors.textSecondary,
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Workspace Tenant ID',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                    fontFamily: 'Inter',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _tenantController,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textPrimary,
+                                fontFamily: 'RobotoMono',
+                              ),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: AppColors.surfaceAlt,
+                                hintText: 'contoh: demo-tenant',
+                                hintStyle: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                  color: AppColors.textMuted,
                                   fontFamily: 'Inter',
                                 ),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: const Color(0xFFF4F4F4),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 12,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  hintText: 'Masukkan Tenant ID',
+                                prefixIcon: const Icon(
+                                  Icons.business_center_outlined,
+                                  size: 18,
+                                  color: AppColors.textMuted,
                                 ),
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'Workspace Tenant ID wajib diisi';
-                                  }
-                                  return null;
-                                },
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 14,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: AppColors.border),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: AppColors.border),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.primary,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: AppColors.danger),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.danger,
+                                    width: 1.5,
+                                  ),
+                                ),
                               ),
-                              const Spacer(),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 48,
-                                child: ElevatedButton.icon(
-                                  onPressed: _isLoading
-                                      ? null
-                                      : _handleVerifyTenant,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Workspace Tenant ID wajib diisi';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Helper text
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 14,
+                                  color: AppColors.textMuted,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Workspace ID dapat diperoleh dari URL portal web gudang Anda (misal: /demo-tenant)',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w400,
+                                      color: AppColors.textMuted,
+                                      height: 1.3,
+                                      fontFamily: 'Inter',
                                     ),
-                                    elevation: 0,
                                   ),
-                                  icon: _isLoading
-                                      ? const SizedBox.shrink()
-                                      : const Icon(
-                                          Icons.arrow_forward_rounded,
-                                          size: 18,
-                                        ),
-                                  label: _isLoading
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Text(
-                                          'Verify Tenant',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            fontFamily: 'Inter',
-                                          ),
-                                        ),
                                 ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+
+                            // Primary Button (50dp height)
+                            SizedBox(
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _handleVerifyTenant,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.2,
+                                        ),
+                                      )
+                                    : const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Verifikasi Workspace',
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                              fontFamily: 'Inter',
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Icon(
+                                            Icons.arrow_forward_rounded,
+                                            size: 18,
+                                          ),
+                                        ],
+                                      ),
                               ),
-                              const SizedBox(height: 42),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 20),
+                            _buildServerConfigPill(context),
+                            const SizedBox(height: 16),
+                          ],
                         ),
                       ),
                     ),
@@ -190,57 +302,66 @@ class _LoginStep1ScreenState extends ConsumerState<LoginStep1Screen> {
     );
   }
 
-  Widget _inputLabel() {
-    return const Align(
-      alignment: Alignment.centerLeft,
-      child: Row(
-        children: [
-          Icon(Icons.domain_outlined, size: 16, color: AppColors.textPrimary),
-          SizedBox(width: 6),
-          Text(
-            'Workspace Tenant ID',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-              fontFamily: 'Inter',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  
+  Widget _buildServerConfigPill(BuildContext context) {
+    final currentUrl = ref.watch(baseUrlProvider);
+    final displayHost = currentUrl
+        .replaceAll('http://', '')
+        .replaceAll('https://', '')
+        .replaceAll('/api', '');
 
-  Widget _logoContainer() {
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F8FF),
+    return Center(
+      child: InkWell(
+        onTap: () => ServerConfigDialog.show(context),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-        ],
-      ),
-      alignment: Alignment.center,
-      child: SvgPicture.asset(
-        'assets/icons/logo_wms.svg',
-        width: 64,
-        height: 64,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF10B981),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Server: ' + displayHost,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF64748B),
+                  fontFamily: 'RobotoMono',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 5),
+              const Icon(
+                LucideIcons.settings2,
+                size: 13,
+                color: Color(0xFF94A3B8),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _brandChip() {
+  Widget _buildBrandChip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFE5EEFF),
+        color: AppColors.primaryLight,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.primaryBorder.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -252,11 +373,36 @@ class _LoginStep1ScreenState extends ConsumerState<LoginStep1Screen> {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF004AC6),
+              color: AppColors.primaryDark,
               fontFamily: 'Inter',
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLogoContainer() {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: SvgPicture.asset(
+        'assets/icons/logo_wms.svg',
+        width: 48,
+        height: 48,
       ),
     );
   }

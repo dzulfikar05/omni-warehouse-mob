@@ -115,7 +115,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _autoNavTimer?.cancel();
 
     // Jalankan animasi exit terlebih dahulu sebelum rute berpindah
-    await _exitController.forward();
+    // Langsung navigasi tanpa melarutkan layar ke 0 opacity
     if (!mounted) return;
 
     final isAuth = ref.read(authProvider).isAuthenticated;
@@ -131,7 +131,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _navigated = true;
     _autoNavTimer?.cancel();
 
-    await _exitController.forward();
+    // Langsung navigasi tanpa melarutkan layar ke 0 opacity
     if (!mounted) return;
 
     context.go('/login/tenant');

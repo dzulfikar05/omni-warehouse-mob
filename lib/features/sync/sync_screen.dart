@@ -838,7 +838,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
           Icon(Icons.cloud_done_rounded, size: 44, color: AppColors.success),
           SizedBox(height: 10),
           Text(
-            'Antrean Isar Bersih',
+            'Antrean Offline Bersih',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,

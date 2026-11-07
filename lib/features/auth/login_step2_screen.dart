@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/api/api_exception.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../shared/widgets/server_config_dialog.dart';
 import 'auth_model.dart';
 import 'auth_repository.dart';
-import 'login_step1_screen.dart';
 
 class LoginStep2Screen extends ConsumerStatefulWidget {
   const LoginStep2Screen({super.key, this.tenantInfo});
@@ -25,6 +28,7 @@ class _LoginStep2ScreenState extends ConsumerState<LoginStep2Screen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _rememberDevice = true;
 
   @override
   void initState() {
@@ -95,317 +99,599 @@ class _LoginStep2ScreenState extends ConsumerState<LoginStep2Screen> {
 
   void _showSnackBar(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red.shade700),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-    final tenantName = widget.tenantInfo?.name ?? authState.tenantName ?? '';
-    final tenantSlug = widget.tenantInfo?.slug ?? authState.tenantSlug ?? '';
+    final tenantName = widget.tenantInfo?.name ?? authState.tenantName ?? 'PT Demo Logistik';
+    final tenantSlug = widget.tenantInfo?.slug ?? authState.tenantSlug ?? 'demo-tenant';
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          const Positioned(
-            left: -107,
-            top: -16,
-            child: BlurCircle(color: Color(0x4DDBE1FF)),
-          ),
-          const Positioned(
-            right: -105,
-            bottom: 38,
-            child: BlurCircle(color: Color(0x66D9E2FD)),
-          ),
-          SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 34),
-                      child: IntrinsicHeight(
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const SizedBox(height: 24),
-                              _brandChip(),
-                              const SizedBox(height: 32),
-                              _logoContainer(),
-                              const SizedBox(height: 32),
-                              const Text(
-                                'Login Operator Gudang',
-                                textAlign: TextAlign.center,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // --- 1. TOP HEADER APP BAR (Logiflow ID / Back / Help) ---
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                LucideIcons.arrowLeft,
+                                size: 22,
+                                color: Color(0xFF334155),
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => context.go('/login/tenant'),
+                              tooltip: 'Kembali',
+                            ),
+                            const Text(
+                              'OMNIWAREHOUSE ID',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.0,
+                                color: Color(0xFF94A3B8),
+                                fontFamily: 'Inter',
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                LucideIcons.circleHelp,
+                                size: 20,
+                                color: Color(0xFF94A3B8),
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Hubungi Supervisor Gudang jika ada kendala akun.'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                              tooltip: 'Bantuan',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // --- 2. LOGO SQUIRCLE ICON ---
+                        Center(
+                          child: Container(
+                            width: 68,
+                            height: 68,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF), // soft blue-50
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            alignment: Alignment.center,
+                            child: SvgPicture.asset(
+                              'assets/icons/logo_wms.svg',
+                              width: 38,
+                              height: 38,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+
+                        // --- 3. TITLE & SUBTITLE ---
+                        const Text(
+                          'Login Operator Gudang',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A), // Slate-900
+                            letterSpacing: -0.4,
+                            fontFamily: 'PlusJakartaSans',
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Masukkan kredensial operator untuk\nsinkronisasi inventaris',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: Color(0xFF64748B), // Slate-500
+                            height: 1.35,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // --- 4. TENANT INFO CARD (Presisi & Seimbang sesuai referensi) ---
+                        _buildTenantCard(tenantName, tenantSlug),
+                        const SizedBox(height: 20),
+
+                        // --- 5. EMAIL FIELD (Tanpa Icon Redundan pada Label) ---
+                        const Text(
+                          'Email Operator',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF334155), // Slate-700
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF0F172A),
+                            fontFamily: 'Inter',
+                          ),
+                          decoration: _buildInputDecoration(
+                            hint: tenantSlug.isNotEmpty
+                                ? 'operator@$tenantSlug.com'
+                                : 'nama@demo-tenant.com',
+                            prefixIcon: LucideIcons.mail,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Email operator wajib diisi';
+                            }
+                            if (!v.contains('@')) {
+                              return 'Format email tidak valid';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // --- 6. PASSWORD FIELD WITH FORGOT PASSWORD LINK ---
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Kata Sandi',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF334155),
+                                fontFamily: 'Inter',
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Silakan hubungi Administrator untuk reset sandi.'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                              child: const Text(
+                                'Lupa Sandi?',
                                 style: TextStyle(
-                                  fontSize: 24,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                  fontFamily: 'PlusJakartaSans',
-                                ),
-                              ),
-                              const SizedBox(height: 32),
-
-                              // TENANT BADGE HEADER (DINAMIS)
-                              _tenantHeader(tenantName),
-                              const SizedBox(height: 10),
-                              _readonlyContainer(tenantSlug),
-                              const SizedBox(height: 18),
-
-                              // EMAIL FIELD (DINAMIS HINT)
-                              _fieldLabel(Icons.email_outlined, 'Email'),
-                              const SizedBox(height: 10),
-                              TextFormField(
-                                controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Color(0xFF565E74),
+                                  color: Color(0xFF2563EB), // Blue-600
                                   fontFamily: 'Inter',
                                 ),
-                                decoration: _inputDecoration(
-                                  tenantSlug.isNotEmpty
-                                      ? 'operator@$tenantSlug.com'
-                                      : 'nama@email.com',
-                                ),
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) {
-                                    return 'Email wajib diisi';
-                                  }
-                                  if (!v.contains('@')) {
-                                    return 'Format email tidak valid';
-                                  }
-                                  return null;
-                                },
                               ),
-                              const SizedBox(height: 18),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF0F172A),
+                            fontFamily: 'Inter',
+                          ),
+                          decoration: _buildInputDecoration(
+                            hint: '••••••••',
+                            prefixIcon: LucideIcons.lock,
+                          ).copyWith(
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? LucideIcons.eyeOff
+                                    : LucideIcons.eye,
+                                size: 19,
+                                color: const Color(0xFF94A3B8),
+                              ),
+                              onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                            ),
+                          ),
+                          validator: (v) => (v == null || v.isEmpty)
+                              ? 'Kata sandi wajib diisi'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
 
-                              // PASSWORD FIELD
-                              _fieldLabel(Icons.lock_outline, 'Password'),
-                              const SizedBox(height: 10),
-                              TextFormField(
-                                controller: _passwordController,
-                                obscureText: _obscurePassword,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Color(0xFF565E74),
-                                  fontFamily: 'Inter',
+                        // --- 7. CHECKBOX & VERSION ROW ---
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: Checkbox(
+                                    value: _rememberDevice,
+                                    onChanged: (v) =>
+                                        setState(() => _rememberDevice = v ?? true),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    activeColor: const Color(0xFF2563EB),
+                                    side: const BorderSide(
+                                      color: Color(0xFFCBD5E1),
+                                      width: 1.5,
+                                    ),
+                                  ),
                                 ),
-                                decoration: _inputDecoration('••••••••')
-                                    .copyWith(
-                                      suffixIcon: IconButton(
-                                        icon: Icon(
-                                          _obscurePassword
-                                              ? Icons.visibility_off_outlined
-                                              : Icons.visibility_outlined,
-                                          size: 18,
-                                          color: const Color(0xFF9CA3AF),
-                                        ),
-                                        onPressed: () => setState(
-                                          () => _obscurePassword =
-                                              !_obscurePassword,
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Ingat perangkat scanner ini',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF475569),
+                                    fontFamily: 'Inter',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Text(
+                              'v2.4.1',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF94A3B8),
+                                fontFamily: 'RobotoMono',
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // --- 8. ACTION SUBMIT BUTTON ---
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _handleLogin,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2563EB), // Tailwind Blue-600
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: const Color(0xFF93C5FD),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.2,
+                                    ),
+                                  )
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Masuk ke Dashboard',
+                                        style: TextStyle(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w600,
+                                          fontFamily: 'Inter',
                                         ),
                                       ),
-                                    ),
-                                validator: (v) => (v == null || v.isEmpty)
-                                    ? 'Password wajib diisi'
-                                    : null,
-                              ),
-
-                              const Spacer(),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 48,
-                                child: ElevatedButton.icon(
-                                  onPressed: _isLoading ? null : _handleLogin,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 0,
+                                      SizedBox(width: 8),
+                                      Icon(
+                                        LucideIcons.arrowRight,
+                                        size: 18,
+                                      ),
+                                    ],
                                   ),
-                                  icon: _isLoading
-                                      ? const SizedBox.shrink()
-                                      : const Icon(
-                                          Icons.arrow_forward_rounded,
-                                          size: 18,
-                                        ),
-                                  label: _isLoading
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Text(
-                                          'Masuk ke Dashboard',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            fontFamily: 'Inter',
-                                          ),
-                                        ),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+
+                        // --- 9. FOOTER KENDALA LOGIN (Teks Biru) ---
+                        Center(
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              const Text(
+                                'Kendala login? ',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w400,
+                                  color: Color(0xFF64748B),
+                                  fontFamily: 'Inter',
                                 ),
                               ),
-                              const SizedBox(height: 42),
+                              GestureDetector(
+                                onTap: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                                    ),
+                                    builder: (ctx) => Padding(
+                                      padding: const EdgeInsets.all(24),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Pusat Bantuan Operator',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF0F172A),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          const Text(
+                                            'Jika Anda lupa sandi atau workspace ID tidak ditemukan, hubungi Supervisor Gudang atau tim IT WMS di shift Anda.',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Color(0xFF64748B),
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            height: 40,
+                                            child: OutlinedButton.icon(
+                                              onPressed: () {
+                                                Navigator.pop(ctx);
+                                                ServerConfigDialog.show(context);
+                                              },
+                                              icon: const Icon(LucideIcons.server, size: 15),
+                                              label: const Text('Pengaturan Alamat Server'),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: const Color(0xFF2563EB),
+                                                side: const BorderSide(color: Color(0xFFBFDBFE)),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            height: 44,
+                                            child: ElevatedButton(
+                                              onPressed: () => Navigator.pop(ctx),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF2563EB),
+                                                foregroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                              ),
+                                              child: const Text('Mengerti'),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: const Text(
+                                  'Hubungi Supervisor Gudang',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF2563EB), // Warna biru
+                                    fontFamily: 'Inter',
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 16),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      filled: true,
-      fillColor: const Color(0xFFF7F7F7),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide.none,
-      ),
-      hintText: hint,
-    );
-  }
-
-  Widget _tenantHeader(String name) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _fieldLabel(Icons.domain_outlined, 'Workspace Tenant ID'),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0x1A007D5B),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.check_circle,
-                size: 12,
-                color: Color(0xFF006243),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                name,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF006243),
-                  fontFamily: 'Inter',
                 ),
               ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _readonlyContainer(String text) {
-    return Container(
-      width: double.infinity,
-      height: 45,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF4FF),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      alignment: Alignment.centerLeft,
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 14,
-          color: Color(0xFF565E74),
-          fontFamily: 'Inter',
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _fieldLabel(IconData icon, String label) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: AppColors.textPrimary),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-            fontFamily: 'Inter',
-          ),
-        ),
-      ],
-    );
-  }
+  // --- WIDGET HELPER: TENANT CARD (Sesuai Referensi React & Gambar) ---
 
-  Widget _logoContainer() {
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F8FF),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      alignment: Alignment.center,
-      child: SvgPicture.asset(
-        'assets/icons/logo_wms.svg',
-        width: 64,
-        height: 64,
-      ),
-    );
-  }
+  Widget _buildTenantCard(String name, String slug) {
+    final displayName = name.isNotEmpty ? name : 'PT Demo Logistik';
+    final displaySlug = slug.isNotEmpty ? slug : 'demo-tenant';
 
-  Widget _brandChip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFE5EEFF),
-        borderRadius: BorderRadius.circular(999),
+        color: const Color(0xFFF8FAFC), // slate-50/80
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)), // slate-200
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SvgPicture.asset('assets/icons/logo_wms.svg', width: 14, height: 14),
-          const SizedBox(width: 6),
-          const Text(
-            'OmniWarehouse Ecosystem',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF004AC6),
-              fontFamily: 'Inter',
+          // Left building icon box
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              LucideIcons.building2,
+              size: 19,
+              color: Color(0xFF475569), // slate-600
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Middle Tenant Name & Workspace ID (Bebas terpotong, breathing room lega)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  displayName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0F172A), // slate-900
+                    fontFamily: 'Inter',
+                    height: 1.25,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'workspace: ' + displaySlug,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0xFF64748B), // slate-500
+                    fontFamily: 'RobotoMono',
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Right Verified Badge (Emerald pill - presisi & proporsional)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 3.5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFECFDF5), // emerald-50
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFFA7F3D0)), // emerald-200
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  LucideIcons.circleCheck,
+                  size: 12,
+                  color: Color(0xFF059669), // emerald-600
+                ),
+                SizedBox(width: 3.5),
+                Text(
+                  'Terverifikasi',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF047857), // emerald-700
+                    fontFamily: 'Inter',
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // --- INPUT DECORATION HELPER ---
+  InputDecoration _buildInputDecoration({
+    required String hint,
+    required IconData prefixIcon,
+  }) {
+    return InputDecoration(
+      filled: true,
+      fillColor: Colors.white,
+      hintText: hint,
+      hintStyle: const TextStyle(
+        fontSize: 13.5,
+        fontWeight: FontWeight.w400,
+        color: Color(0xFF94A3B8), // slate-400
+        fontFamily: 'Inter',
+      ),
+      prefixIcon: Icon(
+        prefixIcon,
+        size: 18,
+        color: const Color(0xFF94A3B8),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE11D48)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5),
       ),
     );
   }

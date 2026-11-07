@@ -11,6 +11,7 @@ class SecureStorage {
   static const _kTenantName = 'tenant_name';
   static const _kUserName = 'user_name';
   static const _kUserRole = 'user_role';
+  static const _kCustomServerUrl = 'custom_server_url';
 
   // --- PRIMITIVE GETTERS & SETTERS ---
   Future<void> saveToken(String token) async =>
@@ -27,7 +28,17 @@ class SecureStorage {
   Future<String?> getTenantName() async =>
       await _storage.read(key: _kTenantName);
 
-  // --- EXTENSION SESSION METHODS (RESOLVING LINTER ERRORS) ---
+  // --- CUSTOM SERVER URL (PERSISTEN & FLEKSIBEL) ---
+  Future<void> saveCustomServerUrl(String url) async =>
+      await _storage.write(key: _kCustomServerUrl, value: url);
+
+  Future<String?> getCustomServerUrl() async =>
+      await _storage.read(key: _kCustomServerUrl);
+
+  Future<void> clearCustomServerUrl() async =>
+      await _storage.delete(key: _kCustomServerUrl);
+
+  // --- EXTENSION SESSION METHODS ---
 
   /// Menyimpan seluruh kredensial sesi setelah login berhasil
   Future<void> saveSession({
@@ -47,9 +58,13 @@ class SecureStorage {
 
   Future<String?> getUserRole() async => await _storage.read(key: _kUserRole);
 
-  /// Menghapus seluruh sesi dari storage fisik saat logout
+  /// Menghapus seluruh sesi login saat logout (tetap mempertahankan konfigurasi server)
   Future<void> clearSession() async {
-    await _storage.deleteAll();
+    await _storage.delete(key: _kToken);
+    await _storage.delete(key: _kTenantSlug);
+    await _storage.delete(key: _kTenantName);
+    await _storage.delete(key: _kUserName);
+    await _storage.delete(key: _kUserRole);
   }
 
   Future<void> clearAll() async => await clearSession();

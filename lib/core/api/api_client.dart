@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 
 import '../auth/secure_storage.dart';
+import '../config/app_config.dart';
 import 'api_exception.dart';
 
 class ApiClient {
@@ -98,28 +99,10 @@ class ApiClient {
 }
 
 // =============================================================================
-// KONFIGURASI BASE URL PORT 80
+// KONFIGURASI BASE URL DINAMIS DARI APP CONFIG (.ENV)
 // =============================================================================
 
-/// IP Laptop berdasarkan ipconfig Wi-Fi kamu
-const String _kLaptopIp = 'localhost';
-
-/// Setel 'true' jika testing menggunakan HP FISIK / Handheld Gudang via Wi-Fi.
-/// Setel 'false' jika testing menggunakan ANDROID EMULATOR / IOS SIMULATOR.
-const bool _usePhysicalDevice = true; 
-
-String _resolveBaseUrl() {
-  if (_usePhysicalDevice) {
-    // Port 80 tidak perlu dituliskan port-nya pada URL
-    return 'http://$_kLaptopIp/api';
-  } else {
-    if (kIsWeb) return 'http://localhost/api';
-    if (Platform.isAndroid) return 'http://10.0.2.2/api';
-    return 'http://127.0.0.1/api';
-  }
-}
-
-final baseUrlProvider = StateProvider<String>((ref) => _resolveBaseUrl());
+final baseUrlProvider = StateProvider<String>((ref) => AppConfig.baseUrl);
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(baseUrl: ref.watch(baseUrlProvider));
@@ -128,3 +111,15 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 final dioProvider = Provider<Dio>((ref) {
   return ref.watch(apiClientProvider).dio;
 });
+
+/// Mengubah Base URL runtime dan langsung memperbarui instance Dio
+Future<void> updateAppBaseUrl(WidgetRef ref, String newUrl) async {
+  await AppConfig.setCustomBaseUrl(newUrl);
+  ref.read(baseUrlProvider.notifier).state = AppConfig.baseUrl;
+}
+
+/// Reset Base URL runtime ke bawaan platform/.env
+Future<void> resetAppBaseUrl(WidgetRef ref) async {
+  await AppConfig.resetToDefault();
+  ref.read(baseUrlProvider.notifier).state = AppConfig.baseUrl;
+}

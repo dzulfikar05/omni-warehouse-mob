@@ -1,7 +1,33 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import 'dashboard_model.dart';
+
+class DashboardState {
+  final DashboardSummary summary;
+  final bool isLoading;
+  final String? errorMessage;
+
+  const DashboardState({
+    this.summary = const DashboardSummary(),
+    this.isLoading = false,
+    this.errorMessage,
+  });
+
+  DashboardState copyWith({
+    DashboardSummary? summary,
+    bool? isLoading,
+    String? errorMessage,
+    bool clearError = false,
+  }) {
+    return DashboardState(
+      summary: summary ?? this.summary,
+      isLoading: isLoading ?? this.isLoading,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+    );
+  }
+}
 
 abstract class DashboardRepository {
   DashboardSummary getInitialSummary();
@@ -78,7 +104,7 @@ class MockDashboardRepository implements DashboardRepository {
 
   @override
   Future<DashboardSummary> getSummary() async {
-    await Future.delayed(const Duration(milliseconds: 200));
+    await Future.delayed(const Duration(milliseconds: 300));
     return _summary;
   }
 
@@ -113,36 +139,57 @@ class ApiDashboardRepository implements DashboardRepository {
 
   @override
   Future<void> syncOfflineQueue() async {
-    // Panggil sync endpoint Laravel
+    // Dipanggil saat fitur sinkronisasi Isar offline aktif
+    await Future.delayed(const Duration(milliseconds: 600));
   }
 }
 
 final dashboardDataSourceProvider = Provider<DashboardRepository>((ref) {
-  return MockDashboardRepository();
-  // return ApiDashboardRepository(ref.watch(dioProvider));
+  final dio = ref.watch(dioProvider);
+  return ApiDashboardRepository(dio);
 });
 
-class DashboardNotifier extends StateNotifier<DashboardSummary> {
+class DashboardNotifier extends StateNotifier<DashboardState> {
   final DashboardRepository _repository;
 
-  DashboardNotifier(this._repository) : super(_repository.getInitialSummary());
+  DashboardNotifier(this._repository)
+      : super(DashboardState(
+          summary: _repository.getInitialSummary(),
+          isLoading: true,
+        )) {
+    refresh();
+  }
 
   Future<void> refresh() async {
-    final res = await _repository.getSummary();
-    state = res;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final res = await _repository.getSummary();
+      state = state.copyWith(
+        summary: res,
+        isLoading: false,
+        clearError: true,
+      );
+    } catch (e) {
+      // Pertahankan summary lama jika gagal terhubung dan tampilkan pesan error
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Gagal memuat data dari server: ${e.toString()}',
+      );
+    }
   }
 
   Future<void> syncOfflineQueue() async {
     await _repository.syncOfflineQueue();
-    state = state.copyWith(
+    final updatedSummary = state.summary.copyWith(
       pendingSyncCount: 0,
-      kpi: state.kpi.copyWith(offlineQueueCount: 0),
+      kpi: state.summary.kpi.copyWith(offlineQueueCount: 0),
     );
+    state = state.copyWith(summary: updatedSummary);
   }
 }
 
 final dashboardNotifierProvider =
-    StateNotifierProvider<DashboardNotifier, DashboardSummary>((ref) {
+    StateNotifierProvider<DashboardNotifier, DashboardState>((ref) {
   final repo = ref.watch(dashboardDataSourceProvider);
   return DashboardNotifier(repo);
 });

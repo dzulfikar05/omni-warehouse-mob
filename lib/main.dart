@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/auth/auth_provider.dart';
+import 'core/config/app_config.dart';
 import 'core/offline/offline_db.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment config (.env)
+  await AppConfig.init();
 
   // Init offline storage
   await OfflineDb.init();

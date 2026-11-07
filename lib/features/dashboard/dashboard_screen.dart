@@ -1094,7 +1094,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         });
                         OmniSnackbar.show(
                           context,
-                          message: 'Tersimpan di antrean Isar lokal (Offline Ready)',
+                          message: 'Tersimpan di Draf Offline (Siap Sinkron)',
                           icon: Icons.save_outlined,
                         );
                       },
@@ -1106,7 +1106,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                       ),
                       child: const Text(
-                        'Simpan ke Isar',
+                        'Simpan Draf',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -1125,7 +1125,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         Navigator.of(sheetCtx).pop();
                         OmniSnackbar.show(
                           context,
-                          message: 'Transaksi berhasil dikonfirmasi ke DB!',
+                          message: 'Transaksi berhasil diselesaikan!',
                           icon: Icons.verified_rounded,
                         );
                       },
@@ -1138,7 +1138,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                       ),
                       child: const Text(
-                        'Komit Transaksi',
+                        'Selesaikan Transaksi',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,

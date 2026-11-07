@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "OmniWarehouse (Default)",
+      "request": "launch",
+      "type": "dart"
+    },
+    {
+      "name": "OmniWarehouse (Android Emulator - Auto 10.0.2.2)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=API_BASE_URL=http://10.0.2.2:8000/api"
+      ]
+    }
+  ]
+}
+

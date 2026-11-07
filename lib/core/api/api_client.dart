@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/secure_storage.dart';
+import '../config/app_config.dart';
 import 'api_exception.dart';
 
 class ApiClient {
@@ -95,24 +96,11 @@ class ApiClient {
   }
 }
 
-String _resolveBaseUrl() {
-  const baseUrl = String.fromEnvironment('API_BASE_URL');
-  if (baseUrl.isEmpty) {
-    throw StateError(
-      'API_BASE_URL belum dikonfigurasi. '
-      'Jalankan aplikasi dengan --dart-define-from-file=.env.json.',
-    );
-  }
+// =============================================================================
+// KONFIGURASI BASE URL DINAMIS DARI APP CONFIG (.ENV)
+// =============================================================================
 
-  final uri = Uri.tryParse(baseUrl);
-  if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-    throw StateError('API_BASE_URL harus berupa URL absolut yang valid.');
-  }
-
-  return baseUrl;
-}
-
-final baseUrlProvider = StateProvider<String>((ref) => _resolveBaseUrl());
+final baseUrlProvider = StateProvider<String>((ref) => AppConfig.baseUrl);
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(baseUrl: ref.watch(baseUrlProvider));
@@ -121,3 +109,15 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 final dioProvider = Provider<Dio>((ref) {
   return ref.watch(apiClientProvider).dio;
 });
+
+/// Mengubah Base URL runtime dan langsung memperbarui instance Dio
+Future<void> updateAppBaseUrl(WidgetRef ref, String newUrl) async {
+  await AppConfig.setCustomBaseUrl(newUrl);
+  ref.read(baseUrlProvider.notifier).state = AppConfig.baseUrl;
+}
+
+/// Reset Base URL runtime ke bawaan platform/.env
+Future<void> resetAppBaseUrl(WidgetRef ref) async {
+  await AppConfig.resetToDefault();
+  ref.read(baseUrlProvider.notifier).state = AppConfig.baseUrl;
+}

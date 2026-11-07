@@ -38,7 +38,7 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: AppColors.primary, width: 2),
+              border: Border.all(color: AppColors.border, width: 1.2),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF0F172A).withValues(alpha: 0.06),
@@ -86,7 +86,7 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 14.5,
+                                fontSize: 13.5,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.textPrimary,
                                 letterSpacing: -0.4,
@@ -109,8 +109,8 @@ class OmniAppBar extends ConsumerWidget implements PreferredSizeWidget {
                       onTap: () => context.push('/notifications'),
                       borderRadius: BorderRadius.circular(999),
                       child: Container(
-                        width: 48,
-                        height: 48,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           color: AppColors.surfaceAlt,
                           shape: BoxShape.circle,

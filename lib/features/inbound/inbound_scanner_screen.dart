@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/auth/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'inbound_model.dart';
 import 'inbound_repository.dart';
+import 'widgets/inbound_barcode_scanner.dart';
 
 class InboundScannerScreen extends ConsumerStatefulWidget {
   const InboundScannerScreen({super.key, required this.code});
@@ -18,1271 +20,982 @@ class InboundScannerScreen extends ConsumerStatefulWidget {
       _InboundScannerScreenState();
 }
 
-class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _laserController;
-  late Animation<double> _laserAnimation;
+class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
+  final _barcodeController = TextEditingController();
+  final _goodQtyController = TextEditingController(text: '0');
+  final _damagedQtyController = TextEditingController(text: '0');
+  final _damageNoteController = TextEditingController();
 
-  bool _isFlashOn = false;
-  bool _isAudioBeepOn = true;
+  InboundManifestDetail? _detail;
+  InboundItem? _selectedItem;
+  List<String> _availableRacks = const [];
+  String? _selectedRack;
+  bool _isLoading = true;
+  bool _isScanning = false;
+  bool _isCameraScannerOpen = false;
+  bool _isSaving = false;
+  bool _isUpdatingStatus = false;
   bool _isCommitting = false;
-
-  InboundItem? _activeScannedItem;
-  int _activeGoodQty = 0;
-  int _activeDamagedQty = 0;
-  String _activeTargetRack = 'RACK-A1-01';
-
-  final List<String> _availableRacks = [
-    'RACK-A1-01',
-    'RACK-A1-02',
-    'RACK-A2-01',
-    'RACK-B1-01',
-    'RACK-B1-02',
-    'STAGING-S01',
-  ];
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _laserController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-
-    _laserAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _laserController, curve: Curves.easeInOut),
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final manifest = ref
-          .read(inboundRepositoryProvider.notifier)
-          .getManifestByCode(widget.code);
-      if (manifest != null && manifest.items.isNotEmpty) {
-        // Pre-select first item for immediate inspection
-        _selectItem(manifest.items.first);
-      }
-    });
+    _loadDetail();
   }
 
   @override
   void dispose() {
-    _laserController.dispose();
+    _barcodeController.dispose();
+    _goodQtyController.dispose();
+    _damagedQtyController.dispose();
+    _damageNoteController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadDetail({bool showLoading = true}) async {
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+
+    try {
+      final notifier = ref.read(inboundRepositoryProvider.notifier);
+      final detail = await notifier.loadManifestDetail(widget.code);
+      if (!mounted) return;
+
+      final racks = detail.locations
+          .map((location) => location.rackCode)
+          .where((rack) => rack.isNotEmpty)
+          .toList();
+      var availableRacks = racks;
+      if (availableRacks.isEmpty && _availableRacks.isEmpty) {
+        final options = await ref
+            .read(inboundDataSourceProvider)
+            .getMasterOptions(ref.read(inboundTenantSlugProvider));
+        availableRacks = options.availableRacks;
+      }
+      if (!mounted) return;
+
+      setState(() {
+        _detail = detail;
+        _availableRacks = availableRacks;
+        _isLoading = false;
+      });
+      if (_selectedItem != null) {
+        final refreshed = detail.items
+            .where((item) => item.id == _selectedItem!.id)
+            .firstOrNull;
+        if (refreshed != null) _selectItem(refreshed);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = error.toString();
+      });
+    }
   }
 
   void _selectItem(InboundItem item) {
     setState(() {
-      _activeScannedItem = item;
-      _activeGoodQty = item.goodQty == 0 ? 1 : item.goodQty;
-      _activeDamagedQty = item.damagedQty;
-      _activeTargetRack = item.targetRack ?? 'RACK-A1-01';
+      _selectedItem = item;
+      _goodQtyController.text = item.goodQty.toString();
+      _damagedQtyController.text = item.damagedQty.toString();
+      _damageNoteController.text = item.notes ?? '';
+      _selectedRack =
+          item.targetRack != null && _availableRacks.contains(item.targetRack)
+              ? item.targetRack
+              : (_availableRacks.isEmpty ? null : _availableRacks.first);
     });
   }
 
-  void _simulateScanSku(String sku) {
-    final manifest = ref
-        .read(inboundRepositoryProvider.notifier)
-        .getManifestByCode(widget.code);
-    if (manifest == null) return;
+  Future<void> _verifyBarcode() async {
+    if (_isScanning) return;
 
-    final match = manifest.items.firstWhere(
-      (it) => it.sku.toLowerCase() == sku.toLowerCase(),
-      orElse: () => manifest.items.first,
-    );
-
-    HapticFeedback.mediumImpact();
-    _selectItem(match);
-
-    OmniSnackbar.show(
-      context,
-      message: 'Barcode terdeteksi: ${match.sku} - ${match.name}',
-      icon: Icons.qr_code_scanner_rounded,
-    );
-  }
-
-  void _simulateScanRack(String rack) {
-    HapticFeedback.lightImpact();
-    setState(() {
-      _activeTargetRack = rack;
-    });
-
-    OmniSnackbar.show(
-      context,
-      message: 'Barcode Rak terverifikasi: $rack',
-      icon: Icons.place_rounded,
-    );
-  }
-
-  void _saveCurrentItemTally() {
-    if (_activeScannedItem == null) return;
-
-    HapticFeedback.mediumImpact();
-    ref
-        .read(inboundRepositoryProvider.notifier)
-        .updateItemTally(
-          manifestCode: widget.code,
-          itemId: _activeScannedItem!.id,
-          goodQty: _activeGoodQty,
-          damagedQty: _activeDamagedQty,
-          targetRack: _activeTargetRack,
-        );
-
-    OmniSnackbar.show(
-      context,
-      message:
-          '${_activeScannedItem!.sku} disimpan: $_activeGoodQty Good, $_activeDamagedQty Rusak ke $_activeTargetRack',
-      icon: Icons.check_circle_rounded,
-    );
-
-    // Auto-advance to next item if available
-    final manifest = ref
-        .read(inboundRepositoryProvider.notifier)
-        .getManifestByCode(widget.code);
-    if (manifest != null) {
-      final uncompleted = manifest.items.where(
-        (it) => it.id != _activeScannedItem!.id && !it.isCompleted,
+    final barcode = _barcodeController.text.trim();
+    if (barcode.isEmpty) {
+      OmniSnackbar.show(
+        context,
+        message: 'Masukkan atau scan barcode/SKU terlebih dahulu.',
+        icon: Icons.error_outline_rounded,
       );
-      if (uncompleted.isNotEmpty) {
-        _selectItem(uncompleted.first);
+      return;
+    }
+
+    setState(() => _isScanning = true);
+    try {
+      await ref
+          .read(inboundRepositoryProvider.notifier)
+          .verifyBarcode(widget.code, barcode);
+      await _loadDetail(showLoading: false);
+      _barcodeController.clear();
+      HapticFeedback.mediumImpact();
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: 'Barcode berhasil diverifikasi.',
+          icon: Icons.check_circle_rounded,
+        );
       }
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: error.toString(),
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isScanning = false);
     }
   }
 
-  void _commitInbound(InboundManifest manifest) async {
-    final hasDamaged = manifest.items.any((it) => it.damagedQty > 0);
+  Future<void> _openCameraScanner() async {
+    if (_isScanning || _isCameraScannerOpen) return;
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppColors.successLight,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.verified_rounded,
-                color: AppColors.success,
-                size: 20,
-              ),
+    setState(() => _isCameraScannerOpen = true);
+    String? scannedCode;
+    try {
+      scannedCode = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const InboundBarcodeScannerScreen(),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isCameraScannerOpen = false);
+    }
+
+    if (scannedCode != null && scannedCode.trim().isNotEmpty && mounted) {
+      _barcodeController.text = scannedCode;
+      await _verifyBarcode();
+    }
+  }
+
+  Future<void> _savePutaway() async {
+    final item = _selectedItem;
+    if (item == null) return;
+
+    final goodQty = int.tryParse(_goodQtyController.text.trim());
+    final damagedQty = int.tryParse(_damagedQtyController.text.trim());
+    if (goodQty == null ||
+        damagedQty == null ||
+        goodQty < 0 ||
+        damagedQty < 0) {
+      OmniSnackbar.show(
+        context,
+        message: 'Jumlah fisik harus bernilai angka valid.',
+        icon: Icons.error_outline_rounded,
+      );
+      return;
+    }
+
+    final itemId = int.tryParse(item.id);
+    if (itemId == null) return;
+
+    if (_selectedRack == null || _selectedRack!.isEmpty) {
+      OmniSnackbar.show(
+        context,
+        message: 'Pilih lokasi rak tujuan.',
+        icon: Icons.error_outline_rounded,
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(inboundRepositoryProvider.notifier).updateItemTally(
+            manifestCode: widget.code,
+            itemId: itemId,
+            goodQty: goodQty,
+            damagedQty: damagedQty,
+            targetRack: _selectedRack!,
+            damageNote: _damageNoteController.text.trim().isEmpty
+                ? null
+                : _damageNoteController.text.trim(),
+          );
+      await _loadDetail(showLoading: false);
+      if (!mounted) return;
+      OmniSnackbar.show(
+        context,
+        message: 'Alokasi rak dan kuantitas fisik berhasil disimpan.',
+        icon: Icons.check_circle_rounded,
+      );
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: error.toString(),
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _changeHoldStatus(InboundManifest manifest) async {
+    String? reason;
+    if (manifest.status != InboundStatus.hold) {
+      final reasonController = TextEditingController();
+      reason = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Hold transaksi inbound'),
+          content: TextField(
+            controller: reasonController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Alasan hold (opsional)',
+              border: OutlineInputBorder(),
             ),
-            const SizedBox(width: 10),
-            const Text(
-              'Commit Penerimaan',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, reasonController.text),
+              child: const Text('Hold'),
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Apakah seluruh muatan ${manifest.code} (${manifest.scannedUnits} unit) telah tuntas diverifikasi fisik?',
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (hasDamaged)
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.dangerLight,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.dangerBorder),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      size: 16,
-                      color: AppColors.danger,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Ditemukan ${manifest.damagedUnits} unit barang rusak. Data akan otomatis masuk ke Karantina di web Laravel.',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.danger,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
+      );
+      reasonController.dispose();
+      if (reason == null || !mounted) return;
+    }
+
+    setState(() => _isUpdatingStatus = true);
+    try {
+      final notifier = ref.read(inboundRepositoryProvider.notifier);
+      if (manifest.status == InboundStatus.hold) {
+        await notifier.resumeManifest(widget.code);
+      } else {
+        await notifier.holdManifest(widget.code, reason: reason);
+      }
+      await _loadDetail(showLoading: false);
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: manifest.status == InboundStatus.hold
+              ? 'Transaksi inbound dilanjutkan.'
+              : 'Transaksi inbound di-HOLD.',
+          icon: Icons.check_circle_rounded,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: error.toString(),
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdatingStatus = false);
+    }
+  }
+
+  Future<void> _commitInbound(InboundManifest manifest) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Commit penerimaan inbound'),
+        content: Text(
+          'Selesaikan dan simpan stok manifes ${manifest.code} ke rak?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text(
-              'Batal',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text('Ya, Commit Inbound'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Commit ke Rak'),
           ),
         ],
       ),
     );
-
     if (confirm != true || !mounted) return;
 
     setState(() => _isCommitting = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-
-    if (mounted) {
-      ref.read(inboundRepositoryProvider.notifier).commitManifest(widget.code);
-      setState(() => _isCommitting = false);
-
+    try {
+      await ref
+          .read(inboundRepositoryProvider.notifier)
+          .commitManifestApi(widget.code);
+      if (!mounted) return;
       OmniSnackbar.show(
         context,
-        message:
-            'Manifes ${manifest.code} berhasil di-commit! Stok bertambah di database.',
-        icon: Icons.cloud_done_rounded,
+        message: 'Stok fisik berhasil di-commit ke rak gudang.',
+        icon: Icons.check_circle_rounded,
       );
-
       context.go('/inbound');
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: error.toString(),
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCommitting = false);
     }
-  }
-
-  void _showManualInputDialog() {
-    final barcodeController = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      constraints: const BoxConstraints(maxWidth: 480),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          16,
-          20,
-          MediaQuery.of(ctx).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFCBD5E1),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Input Manual Barcode / SKU',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Gunakan jika barcode fisik pada kemasan barang robek atau pudar.',
-              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: barcodeController,
-              autofocus: true,
-              style: const TextStyle(
-                fontFamily: 'RobotoMono',
-                fontWeight: FontWeight.w700,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Ketik SKU atau Barcode EAN-13...',
-                hintStyle: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textMuted,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                suffixIcon: IconButton(
-                  icon: const Icon(
-                    Icons.check_rounded,
-                    color: AppColors.primary,
-                  ),
-                  onPressed: () {
-                    final query = barcodeController.text.trim();
-                    if (query.isNotEmpty) {
-                      Navigator.of(ctx).pop();
-                      _simulateScanSku(query);
-                    }
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton(
-                onPressed: () {
-                  final query = barcodeController.text.trim();
-                  if (query.isNotEmpty) {
-                    Navigator.of(ctx).pop();
-                    _simulateScanSku(query);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  'Verifikasi & Masukkan Item',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final manifests = ref.watch(inboundRepositoryProvider);
-    final manifest = manifests.firstWhere(
-      (m) => m.code.toLowerCase() == widget.code.toLowerCase(),
-      orElse: () => manifests.first,
-    );
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // Clean light slate-100
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(60 + MediaQuery.paddingOf(context).top),
-        child: Container(
-          padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 6,
-            left: 12,
-            right: 12,
-            bottom: 8,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: AppColors.border)),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: () => context.go('/inbound'),
-                icon: const Icon(
-                  Icons.arrow_back_rounded,
-                  color: AppColors.textPrimary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          manifest.code,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'RobotoMono',
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: manifest.status.bg,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            manifest.status.label,
-                            style: TextStyle(
-                              color: manifest.status.color,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: 'RobotoMono',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      manifest.supplier,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Flashlight toggle
-              IconButton(
-                onPressed: () {
-                  setState(() => _isFlashOn = !_isFlashOn);
-                  OmniSnackbar.show(
-                    context,
-                    message: _isFlashOn
-                        ? 'Senter kamera aktif'
-                        : 'Senter kamera mati',
-                    icon: _isFlashOn
-                        ? Icons.flash_on_rounded
-                        : Icons.flash_off_rounded,
-                  );
-                },
-                icon: Icon(
-                  _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                  color: _isFlashOn
-                      ? const Color(0xFFFACC15)
-                      : AppColors.textSecondary,
-                  size: 20,
-                ),
-              ),
-              // Audio Beeper toggle
-              IconButton(
-                onPressed: () {
-                  setState(() => _isAudioBeepOn = !_isAudioBeepOn);
-                },
-                icon: Icon(
-                  _isAudioBeepOn
-                      ? Icons.volume_up_rounded
-                      : Icons.volume_off_rounded,
-                  color: _isAudioBeepOn
-                      ? AppColors.primary
-                      : AppColors.textSecondary,
-                  size: 20,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 480),
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.code)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_detail == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.code)),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Overall Progress Strip
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF8FAFC),
-                    border: Border(bottom: BorderSide(color: AppColors.border)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.assignment_turned_in_rounded,
-                        size: 16,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Progres Validasi Koli',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  '${manifest.scannedUnits} / ${manifest.totalUnits} Units (${(manifest.progressPercentage * 100).toInt()}%)',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontFamily: 'RobotoMono',
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(999),
-                              child: LinearProgressIndicator(
-                                value: manifest.progressPercentage,
-                                minHeight: 5,
-                                backgroundColor: const Color(0xFFE2E8F0),
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  manifest.isFullyCompleted
-                                      ? AppColors.success
-                                      : AppColors.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                const Icon(
+                  Icons.error_outline_rounded,
+                  color: AppColors.danger,
+                  size: 36,
                 ),
-
-                // Viewfinder Scanner & Quick Simulator
-                Expanded(
-                  flex: 3,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Simulated Camera Feed Background
-                      Container(
-                        width: double.infinity,
-                        decoration: const BoxDecoration(
-                          gradient: RadialGradient(
-                            colors: [Color(0xFF1E293B), Color(0xFF020617)],
-                            radius: 0.9,
-                          ),
-                        ),
-                      ),
-
-                      // Reticle Box
-                      Container(
-                        width: 240,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.5),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Stack(
-                          children: [
-                            // Corner Accents
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              child: Container(
-                                width: 22,
-                                height: 22,
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 3.5,
-                                    ),
-                                    left: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 3.5,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: Container(
-                                width: 22,
-                                height: 22,
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 3.5,
-                                    ),
-                                    right: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 3.5,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              child: Container(
-                                width: 22,
-                                height: 22,
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 3.5,
-                                    ),
-                                    left: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 3.5,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: Container(
-                                width: 22,
-                                height: 22,
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 3.5,
-                                    ),
-                                    right: BorderSide(
-                                      color: AppColors.primary,
-                                      width: 3.5,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            // Animated Sweeping Laser Line (Blue Laser)
-                            AnimatedBuilder(
-                              animation: _laserAnimation,
-                              builder: (context, child) {
-                                return Positioned(
-                                  top: _laserAnimation.value * 150,
-                                  left: 6,
-                                  right: 6,
-                                  child: Container(
-                                    height: 2,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF60A5FA),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Color(0xFF60A5FA),
-                                          blurRadius: 8,
-                                          spreadRadius: 1,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-
-                            // Center Crosshair
-                            Center(
-                              child: Icon(
-                                Icons.filter_center_focus_rounded,
-                                size: 32,
-                                color: Colors.white.withValues(alpha: 0.25),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Top status pill in Viewfinder
-                      Positioned(
-                        top: 14,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: AppColors.primaryBorder),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.camera_alt_outlined,
-                                size: 12,
-                                color: AppColors.primary,
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                'AUTO-FOCUS READY',
-                                style: TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 10,
-                                  fontFamily: 'RobotoMono',
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Bottom instruction pill
-                      Positioned(
-                        bottom: 46,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: const Text(
-                            'Arahkan kamera ke Barcode Koli / SKU',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Quick Simulation Bar for easy testing on Windows/Mobile
-                      Positioned(
-                        bottom: 6,
-                        left: 12,
-                        right: 12,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              const Text(
-                                'SIMULASI SCAN: ',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontFamily: 'RobotoMono',
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white70,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              for (final item in manifest.items) ...[
-                                InkWell(
-                                  onTap: () => _simulateScanSku(item.sku),
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    margin: const EdgeInsets.only(right: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: AppColors.primaryBorder,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      item.sku,
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontFamily: 'RobotoMono',
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              InkWell(
-                                onTap: () => _simulateScanRack('RACK-A1-02'),
-                                borderRadius: BorderRadius.circular(6),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: AppColors.primaryBorder,
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Rak A1-02',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontFamily: 'RobotoMono',
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 12),
+                Text(
+                  _errorMessage ?? 'Manifes tidak ditemukan.',
+                  textAlign: TextAlign.center,
                 ),
-
-                // Bottom Inspection & Putaway Workspace (White Bottom Card)
-                Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 12,
-                        offset: Offset(0, -4),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_activeScannedItem != null) ...[
-                        // SKU Header
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        _activeScannedItem!.sku,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w800,
-                                          fontFamily: 'RobotoMono',
-                                          color: AppColors.primary,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF1F5F9),
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          _activeScannedItem!.category,
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            color: AppColors.textSecondary,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _activeScannedItem!.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF0F172A),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                const Text(
-                                  'Target PO',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                Text(
-                                  '${_activeScannedItem!.expectedQty} ${_activeScannedItem!.unit}',
-                                  style: const TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w800,
-                                    fontFamily: 'RobotoMono',
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Steppers Row: Good Qty vs Damaged Qty
-                        Row(
-                          children: [
-                            // Good Qty Stepper
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF0FDF4),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(0xFFBBF7D0),
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Kondisi Bagus (Good)',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF166534),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        _buildStepperBtn(
-                                          icon: Icons.remove_rounded,
-                                          onTap: () {
-                                            if (_activeGoodQty > 0) {
-                                              HapticFeedback.selectionClick();
-                                              setState(() => _activeGoodQty--);
-                                            }
-                                          },
-                                        ),
-                                        Text(
-                                          '$_activeGoodQty',
-                                          style: const TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w800,
-                                            fontFamily: 'RobotoMono',
-                                            color: Color(0xFF166534),
-                                          ),
-                                        ),
-                                        _buildStepperBtn(
-                                          icon: Icons.add_rounded,
-                                          onTap: () {
-                                            HapticFeedback.selectionClick();
-                                            setState(() => _activeGoodQty++);
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-
-                            // Damaged Qty Stepper
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFF1F2),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(0xFFFECDD3),
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Barang Rusak (Damaged)',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF9F1239),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        _buildStepperBtn(
-                                          icon: Icons.remove_rounded,
-                                          onTap: () {
-                                            if (_activeDamagedQty > 0) {
-                                              HapticFeedback.selectionClick();
-                                              setState(
-                                                () => _activeDamagedQty--,
-                                              );
-                                            }
-                                          },
-                                        ),
-                                        Text(
-                                          '$_activeDamagedQty',
-                                          style: const TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w800,
-                                            fontFamily: 'RobotoMono',
-                                            color: Color(0xFF9F1239),
-                                          ),
-                                        ),
-                                        _buildStepperBtn(
-                                          icon: Icons.add_rounded,
-                                          onTap: () {
-                                            HapticFeedback.selectionClick();
-                                            setState(() => _activeDamagedQty++);
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Target Rack Selector Strip
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.place_rounded,
-                                size: 16,
-                                color: AppColors.primary,
-                              ),
-                              const SizedBox(width: 6),
-                              const Text(
-                                'Lokasi Rak Alokasi:',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              const Spacer(),
-                              DropdownButton<String>(
-                                value:
-                                    _availableRacks.contains(_activeTargetRack)
-                                    ? _activeTargetRack
-                                    : _availableRacks.first,
-                                underline: const SizedBox(),
-                                isDense: true,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  fontFamily: 'RobotoMono',
-                                  color: AppColors.primary,
-                                ),
-                                items: _availableRacks.map((rack) {
-                                  return DropdownMenuItem(
-                                    value: rack,
-                                    child: Text(rack),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setState(() => _activeTargetRack = val);
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-
-                      // Primary Save & Advance Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 46,
-                        child: ElevatedButton.icon(
-                          onPressed: _saveCurrentItemTally,
-                          icon: const Icon(Icons.save_rounded, size: 18),
-                          label: const Text(
-                            'Simpan & Lanjut Rak Alokasi',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Dual Secondary Actions: Input Manual Barcode & Commit Inbound
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _showManualInputDialog,
-                              icon: const Icon(
-                                Icons.keyboard_outlined,
-                                size: 16,
-                              ),
-                              label: const Text(
-                                'Input Manual',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.textSecondary,
-                                side: const BorderSide(color: AppColors.border),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _isCommitting
-                                  ? null
-                                  : () => _commitInbound(manifest),
-                              icon: _isCommitting
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.cloud_upload_outlined,
-                                      size: 16,
-                                    ),
-                              label: Text(
-                                _isCommitting
-                                    ? 'Menyimpan...'
-                                    : 'Commit Selesai',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.success,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _loadDetail,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Coba lagi'),
                 ),
               ],
             ),
           ),
         ),
+      );
+    }
+
+    final manifest = _detail!.manifest;
+    final items = _detail!.items;
+    final totalUnits =
+        items.fold<int>(0, (sum, item) => sum + item.expectedQty);
+    final goodUnits = items.fold<int>(0, (sum, item) => sum + item.goodQty);
+    final damagedUnits =
+        items.fold<int>(0, (sum, item) => sum + item.damagedQty);
+    final progress =
+        totalUnits == 0 ? 0.0 : ((goodUnits + damagedUnits) / totalUnits);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Workspace Receiving'),
+        actions: [
+          IconButton(
+            tooltip: 'Muat ulang',
+            onPressed: _loadDetail,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => _loadDetail(showLoading: false),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            _buildManifestHeader(manifest),
+            const SizedBox(height: 12),
+            _buildScanCard(),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetric(
+                    'Total SKU',
+                    '${items.length} ($totalUnits unit)',
+                    Icons.inventory_2_outlined,
+                    AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMetric(
+                    'Valid (Baik)',
+                    '$goodUnits unit',
+                    Icons.check_circle_outline_rounded,
+                    AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetric(
+                    'Rusak (BAP)',
+                    '$damagedUnits unit',
+                    Icons.warning_amber_rounded,
+                    AppColors.warning,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMetric(
+                    'Progress',
+                    '${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                    Icons.local_shipping_outlined,
+                    AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildItemsCard(items),
+            if (_selectedItem != null) ...[
+              const SizedBox(height: 12),
+              _buildPutawayCard(),
+            ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStepperBtn({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFFCBD5E1)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 2,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Icon(icon, size: 20, color: AppColors.textPrimary),
+  Widget _buildManifestHeader(InboundManifest manifest) {
+    final isHeld = manifest.status == InboundStatus.hold;
+    final canEdit = manifest.status != InboundStatus.closed;
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => context.go('/inbound'),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      manifest.code.replaceAll('-', '-\u200B'),
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                      softWrap: true,
+                    ),
+                    Text(
+                      manifest.supplierName,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _statusBadge(manifest.status),
+            ],
+          ),
+          const Divider(height: 20),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: !canEdit || _isUpdatingStatus
+                    ? null
+                    : () => _changeHoldStatus(manifest),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(48, 50),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                ),
+                icon: _isUpdatingStatus
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        isHeld
+                            ? Icons.play_arrow_rounded
+                            : Icons.pause_circle_outline_rounded,
+                        size: 17,
+                      ),
+                label: Text(isHeld ? 'Lanjutkan' : 'Hold Session'),
+              ),
+              ElevatedButton.icon(
+                onPressed:
+                    !canEdit || isHeld || _isCommitting || _isUpdatingStatus
+                        ? null
+                        : () => _commitInbound(manifest),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(48, 50),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                ),
+                icon: _isCommitting
+                    ? const SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.surface,
+                        ),
+                      )
+                    : const Icon(Icons.done_all_rounded, size: 17),
+                label: const Text('Commit ke Rak'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
+
+  Widget _buildScanCard() {
+    final canScan = _detail!.manifest.status != InboundStatus.closed &&
+        _detail!.manifest.status != InboundStatus.hold;
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Verifikasi Barcode / SKU',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Gunakan scanner perangkat atau masukkan kode barang.',
+            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _barcodeController,
+                  enabled: canScan && !_isScanning,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _verifyBarcode(),
+                  decoration: InputDecoration(
+                    hintText: 'Scan barcode / kode SKU...',
+                    prefixIcon: IconButton(
+                      icon: const Icon(Icons.camera_alt_rounded,
+                          color: AppColors.primary),
+                      tooltip: 'Buka Kamera Scanner',
+                      onPressed:
+                          canScan && !_isScanning && !_isCameraScannerOpen
+                              ? _openCameraScanner
+                              : null,
+                    ),
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: canScan && !_isScanning ? _verifyBarcode : null,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(48, 50),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                ),
+                child: _isScanning
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.surface,
+                        ),
+                      )
+                    : const Text('Verifikasi'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetric(String title, String value, IconData icon, Color color) {
+    return _card(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(icon, size: 19, color: color),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemsCard(List<InboundItem> items) {
+    return _card(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Detail Item Receiving & Putaway',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                Text(
+                  'Semua (${items.length})',
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(18),
+              child: Text(
+                'Manifes ini belum memiliki item.',
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            )
+          else
+            ...items.map(_buildItemRow),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemRow(InboundItem item) {
+    final selected = _selectedItem?.id == item.id;
+    return InkWell(
+      onTap: _detail!.manifest.status == InboundStatus.closed
+          ? null
+          : () => _selectItem(item),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primaryLight : AppColors.surface,
+          border: const Border(
+            bottom: BorderSide(color: AppColors.border),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    item.sku.isEmpty ? item.barcode : item.sku,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${item.goodQty + item.damagedQty}/${item.expectedQty} unit',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.name,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
+              ),
+              softWrap: true,
+            ),
+            const SizedBox(height: 7),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                _tag(
+                  item.targetRack ?? 'Belum dialokasikan',
+                  item.targetRack == null
+                      ? AppColors.surfaceAlt
+                      : AppColors.primaryLight,
+                  item.targetRack == null
+                      ? AppColors.textMuted
+                      : AppColors.primary,
+                ),
+                _tag(
+                  item.isCompleted ? 'Selesai' : 'Menunggu scan',
+                  item.isCompleted
+                      ? AppColors.successLight
+                      : AppColors.surfaceAlt,
+                  item.isCompleted ? AppColors.success : AppColors.textMuted,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPutawayCard() {
+    final item = _selectedItem!;
+    final canEdit = _detail!.manifest.status != InboundStatus.closed &&
+        _detail!.manifest.status != InboundStatus.hold;
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Edit / Alokasi Rak',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: item.sku,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                TextSpan(text: ' · ${item.name}'),
+              ],
+            ),
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textMuted,
+            ),
+            softWrap: true,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _quantityField(
+                  label: 'Jumlah baik',
+                  controller: _goodQtyController,
+                  enabled: canEdit,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _quantityField(
+                  label: 'Jumlah rusak',
+                  controller: _damagedQtyController,
+                  enabled: canEdit,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Lokasi Rak',
+            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 5),
+          DropdownButtonFormField<String>(
+            initialValue:
+                _availableRacks.contains(_selectedRack) ? _selectedRack : null,
+            isExpanded: true,
+            hint: const Text('Pilih lokasi rak'),
+            items: _availableRacks
+                .map(
+                  (rack) => DropdownMenuItem(
+                    value: rack,
+                    child: Text(rack),
+                  ),
+                )
+                .toList(),
+            onChanged:
+                canEdit ? (rack) => setState(() => _selectedRack = rack) : null,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _damageNoteController,
+            enabled: canEdit,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Catatan kerusakan (opsional)',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: canEdit && !_isSaving ? _savePutaway : null,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+              ),
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 17,
+                      height: 17,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.surface,
+                      ),
+                    )
+                  : const Icon(Icons.save_outlined, size: 18),
+              label: Text(
+                _isSaving ? 'Menyimpan alokasi...' : 'Simpan Alokasi Rak',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _quantityField({
+    required String label,
+    required TextEditingController controller,
+    required bool enabled,
+  }) =>
+      TextField(
+        controller: controller,
+        enabled: enabled,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+      );
+
+  Widget _statusBadge(InboundStatus status) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: status.bg,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          status.label,
+          style: TextStyle(
+            color: status.color,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+
+  Widget _tag(String label, Color background, Color foreground) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: foreground,
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+
+  Widget _card({required Widget child, EdgeInsets? padding}) => Container(
+        padding: padding ?? const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: child,
+      );
 }
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
+}
+
+final inboundTenantSlugProvider = Provider<String>((ref) {
+  final authState = ref.watch(authProvider);
+  return authState.tenantSlug ?? authState.tenantName ?? 'demo-tenant';
+});

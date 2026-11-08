@@ -120,15 +120,16 @@ class MockDashboardRepository implements DashboardRepository {
 
 class ApiDashboardRepository implements DashboardRepository {
   final Dio _dio;
+  final String tenantSlug;
 
-  ApiDashboardRepository(this._dio);
+  ApiDashboardRepository(this._dio, {this.tenantSlug = ''});
 
   @override
   DashboardSummary getInitialSummary() => const DashboardSummary();
 
   @override
   Future<DashboardSummary> getSummary() async {
-    final response = await _dio.get(ApiEndpoints.dashboardSummary);
+final response = await _dio.get(ApiEndpoints.dashboardSummary(tenantSlug));
     final data = response.data;
     final itemMap = (data is Map && data['data'] is Map)
         ? data['data'] as Map

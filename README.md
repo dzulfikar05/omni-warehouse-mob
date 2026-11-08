@@ -1,16 +1,25 @@
 # omni_warehouse_mob
 
-A new Flutter project.
-
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+### Konfigurasi API
 
-A few resources to get you started if this is your first Flutter project:
+Salin `.env.example.json` menjadi `.env.json`, lalu sesuaikan `API_BASE_URL`.
+Untuk Android Emulator, gunakan `http://10.0.2.2/api`; untuk perangkat fisik,
+gunakan alamat IP komputer server yang dapat dijangkau perangkat, misalnya
+`http://192.168.1.10/api`.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Jalankan aplikasi dengan:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```sh
+flutter run --dart-define-from-file=.env.json
+```
+
+Gunakan flag yang sama saat build, misalnya:
+
+```sh
+flutter build apk --dart-define-from-file=.env.json
+```
+
+File `.env.json` tidak disimpan di Git. Pastikan setiap environment memiliki
+file konfigurasi sendiri sebelum menjalankan atau membuild aplikasi.

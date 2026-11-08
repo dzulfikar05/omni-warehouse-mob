@@ -1,4 +1,4 @@
-/// Seluruh konstanta endpoint API WMS (Flat Route tanpa /v1).
+/// Seluruh konstanta endpoint API WMS OmniWarehouse.
 class ApiEndpoints {
   ApiEndpoints._();
 
@@ -9,34 +9,45 @@ class ApiEndpoints {
   static const String profile = '/profile';
 
   // DASHBOARD
-  static const String dashboardSummary = '/dashboard/summary';
+  static String dashboardSummary(String slug) => '/$slug/dashboard/summary';
 
   // INBOUND (PENERIMAAN BARANG)
-  static const String inboundList = '/transactions/inbound';
-  static String inboundDetail(String code) => '/transactions/inbound/$code';
-  static const String inboundVerifyBarcode = '/transactions/inbound/verify-barcode';
-  static const String inboundPutaway = '/transactions/inbound/putaway';
-  static const String inboundCommit = '/transactions/inbound/commit';
-  static const String inboundHold = '/transactions/inbound/hold';
-
+  static String inboundList(String slug) => '/$slug/inbound/';
+  static String inboundDetail(String slug, String code) =>
+      '/$slug/inbound/manifests/$code';
+  static String inboundCreate(String slug) => '/$slug/inbound/store';
+  static String inboundAdhoc(String slug) => '/$slug/inbound/adhoc';
+  static String inboundVerifyBarcode(String slug) => '/$slug/inbound/scan-item';
+  static String inboundPutaway(String slug) => '/$slug/inbound/putaway';
+  static String inboundCommit(String slug) => '/$slug/inbound/commit';
+  static String inboundHold(String slug) => '/$slug/inbound/hold';
+  static String inboundResume(String slug) => '/$slug/inbound/resume';
+  static String inboundOptions(String slug) => '/$slug/inbound/options';
   // OUTBOUND (PENGIRIMAN BARANG)
-  static const String outboundList = '/transactions/outbound';
-  static String outboundDetail(String code) => '/transactions/outbound/$code';
-  static const String outboundVerifyBarcode = '/transactions/outbound/verify-barcode';
-  static const String outboundPacking = '/transactions/outbound/packing';
-  static const String outboundCommit = '/transactions/outbound/commit';
-  static const String outboundHold = '/transactions/outbound/hold';
+  static String outboundList(String slug) => '/$slug/transactions/outbound';
+  static String outboundDetail(String slug, String code) =>
+      '/$slug/transactions/outbound/$code';
+  static String outboundVerifyBarcode(String slug) =>
+      '/$slug/transactions/outbound/verify-barcode';
+  static String outboundPacking(String slug) =>
+      '/$slug/transactions/outbound/packing';
+  static String outboundCommit(String slug) =>
+      '/$slug/transactions/outbound/commit';
 
   // STOCK TRANSFER (MUTASI RAK / GUDANG)
-  static const String transferList = '/transactions/stock-transfer';
-  static const String transferCreate = '/transactions/stock-transfer';
+  static String transferList(String slug) =>
+      '/$slug/transactions/stock-transfer';
+  static String transferCreate(String slug) =>
+      '/$slug/transactions/stock-transfer';
 
   // STOCK OPNAME (AUDIT FISIK)
-  static const String opnameActiveSession = '/stock-opname/active-session';
-  static const String opnameVerifyCount = '/stock-opname/verify-count';
-  static const String opnameExecute = '/stock-opname/execute-adjustment';
+  static String opnameActiveSession(String slug) =>
+      '/$slug/stock-opname/active-session';
+  static String opnameVerifyCount(String slug) =>
+      '/$slug/stock-opname/verify-count';
+  static String opnameExecute(String slug) =>
+      '/$slug/stock-opname/execute-adjustment';
 
   // PRODUCT LOOKUP
-  static const String productLookup = '/products/lookup';
-
+  static String productLookup(String slug) => '/$slug/products/lookup';
 }

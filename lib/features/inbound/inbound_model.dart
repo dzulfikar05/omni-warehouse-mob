@@ -16,20 +16,27 @@ enum InboundStatus {
       case InboundStatus.closed:
         return 'CLOSED';
       case InboundStatus.hold:
-        return 'HOLD';
+        return 'ON HOLD';
     }
   }
 
   static InboundStatus fromString(String? val) {
     switch (val?.toUpperCase()) {
       case 'RECEIVING':
+      case 'IN_PROGRESS':
+      case 'PROCESS':
+      case 'PROSES':
         return InboundStatus.receiving;
       case 'CLOSED':
       case 'COMPLETED':
+      case 'COMMITTED':
+      case 'SUCCESS':
         return InboundStatus.closed;
       case 'HOLD':
+      case 'ON_HOLD':
         return InboundStatus.hold;
       case 'DRAFT':
+      case 'PENDING':
       default:
         return InboundStatus.draft;
     }
@@ -60,24 +67,54 @@ enum InboundStatus {
         return AppColors.dangerLight;
     }
   }
+}
 
-  Color get border {
-    switch (this) {
-      case InboundStatus.receiving:
-        return AppColors.warningBorder;
-      case InboundStatus.draft:
-        return AppColors.primaryBorder;
-      case InboundStatus.closed:
-        return AppColors.successBorder;
-      case InboundStatus.hold:
-        return AppColors.dangerBorder;
-    }
+class InboundSupplier {
+  final int id;
+  final String code;
+  final String name;
+
+  InboundSupplier({required this.id, required this.code, required this.name});
+
+  factory InboundSupplier.fromJson(Map<String, dynamic> json) {
+    return InboundSupplier(
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      code: json['code']?.toString() ?? json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+    );
+  }
+}
+
+class InboundProductMaster {
+  final int id; // SKU ID untuk transaction_items.sku_id
+  final int productId; // Product Header ID
+  final String sku;
+  final String barcode;
+  final String name;
+
+  InboundProductMaster({
+    required this.id,
+    required this.productId,
+    required this.sku,
+    required this.barcode,
+    required this.name,
+  });
+
+  factory InboundProductMaster.fromJson(Map<String, dynamic> json) {
+    return InboundProductMaster(
+      id: int.tryParse((json['sku_id'] ?? json['id'])?.toString() ?? '') ?? 0,
+      productId: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      sku: json['sku']?.toString() ?? '',
+      barcode: json['barcode']?.toString() ?? json['sku']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+    );
   }
 }
 
 class InboundItem {
   InboundItem({
     required this.id,
+    required this.productId,
     required this.sku,
     required this.barcode,
     required this.name,
@@ -85,12 +122,11 @@ class InboundItem {
     this.goodQty = 0,
     this.damagedQty = 0,
     this.targetRack,
-    this.unit = 'Koli',
-    this.category = 'Logistik',
     this.notes,
   });
 
   final String id;
+  final int productId;
   final String sku;
   final String barcode;
   final String name;
@@ -98,188 +134,101 @@ class InboundItem {
   int goodQty;
   int damagedQty;
   String? targetRack;
-  final String unit;
-  final String category;
   String? notes;
 
   int get totalScanned => goodQty + damagedQty;
   bool get isCompleted => totalScanned >= expectedQty;
   int get remaining => (expectedQty - totalScanned).clamp(0, expectedQty);
 
-  InboundItem copyWith({
-    String? id,
-    String? sku,
-    String? barcode,
-    String? name,
-    int? expectedQty,
-    int? goodQty,
-    int? damagedQty,
-    String? targetRack,
-    String? unit,
-    String? category,
-    String? notes,
-  }) {
-    return InboundItem(
-      id: id ?? this.id,
-      sku: sku ?? this.sku,
-      barcode: barcode ?? this.barcode,
-      name: name ?? this.name,
-      expectedQty: expectedQty ?? this.expectedQty,
-      goodQty: goodQty ?? this.goodQty,
-      damagedQty: damagedQty ?? this.damagedQty,
-      targetRack: targetRack ?? this.targetRack,
-      unit: unit ?? this.unit,
-      category: category ?? this.category,
-      notes: notes ?? this.notes,
-    );
-  }
-
   factory InboundItem.fromJson(Map<String, dynamic> json) {
+    final productMap = json['product'] is Map ? json['product'] : null;
+
     return InboundItem(
       id: json['id']?.toString() ?? '',
-      sku: json['sku']?.toString() ?? '',
-      barcode: json['barcode']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      expectedQty: (json['expected_qty'] ?? json['expectedQty'] ?? 0) as int,
-      goodQty: (json['good_qty'] ?? json['goodQty'] ?? 0) as int,
-      damagedQty: (json['damaged_qty'] ?? json['damagedQty'] ?? 0) as int,
-      targetRack: json['target_rack']?.toString() ?? json['targetRack']?.toString(),
-      unit: json['unit']?.toString() ?? 'Koli',
-      category: json['category']?.toString() ?? 'Logistik',
-      notes: json['notes']?.toString(),
+      productId: int.tryParse(
+            (json['sku_id'] ?? json['product_id'] ?? productMap?['id'] ?? '')
+                .toString(),
+          ) ??
+          0,
+      sku: json['sku']?.toString() ?? productMap?['sku']?.toString() ?? '',
+      barcode: json['barcode']?.toString() ??
+          productMap?['barcode']?.toString() ??
+          '',
+      name: json['product_name']?.toString() ??
+          json['name']?.toString() ??
+          productMap?['name']?.toString() ??
+          'Barang Inbound',
+      expectedQty: _asInt(
+        json['expected_qty'] ?? json['po_qty'] ?? json['expectedQty'],
+      ),
+      goodQty: _asInt(json['good_qty'] ?? json['goodQty']),
+      damagedQty: _asInt(json['damaged_qty'] ?? json['damagedQty']),
+      targetRack: json['target_rack']?.toString() ??
+          (json['location'] is Map
+              ? json['location']['rack_code']?.toString()
+              : null),
+      notes: json['damage_note']?.toString() ?? json['notes']?.toString(),
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'sku': sku,
-    'barcode': barcode,
-    'name': name,
-    'expected_qty': expectedQty,
-    'good_qty': goodQty,
-    'damaged_qty': damagedQty,
-    'target_rack': targetRack,
-    'unit': unit,
-    'category': category,
-    'notes': notes,
-  };
+  static int _asInt(dynamic value) =>
+      int.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 class InboundManifest {
   InboundManifest({
     required this.code,
-    required this.supplier,
-    required this.warehouse,
-    required this.dockBay,
+    required this.supplierId,
+    required this.supplierName,
     required this.totalUnits,
     required this.status,
     required this.items,
-    this.startedAt,
-    this.completedAt,
-    this.truckPlate,
-    this.driverName,
+    this.totalSkus = 0,
     this.isAdhoc = false,
   });
 
   final String code;
-  final String supplier;
-  final String warehouse;
-  final String dockBay;
+  final int supplierId;
+  final String supplierName;
   final int totalUnits;
   InboundStatus status;
   final List<InboundItem> items;
-  final String? startedAt;
-  final String? completedAt;
-  final String? truckPlate;
-  final String? driverName;
+  final int totalSkus;
   final bool isAdhoc;
 
   factory InboundManifest.fromJson(Map<String, dynamic> json) {
+    final supplierMap = json['supplier'] is Map ? json['supplier'] : null;
     final rawItems = json['items'];
     final itemList = <InboundItem>[];
+
     if (rawItems is List) {
       for (final it in rawItems) {
-        if (it is Map<String, dynamic>) {
-          itemList.add(InboundItem.fromJson(it));
-        } else if (it is Map) {
+        if (it is Map) {
           itemList.add(InboundItem.fromJson(Map<String, dynamic>.from(it)));
         }
       }
     }
+    final totalSkus = int.tryParse(
+            (json['total_skus'] ?? json['total_sku'])?.toString() ?? '') ??
+        0;
 
     return InboundManifest(
-      code: json['code']?.toString() ?? '',
-      supplier: json['supplier']?.toString() ?? '',
-      warehouse: json['warehouse']?.toString() ?? '',
-      dockBay: json['dock_bay']?.toString() ?? json['dockBay']?.toString() ?? 'Dock Bay 01',
-      totalUnits: (json['total_units'] ?? json['totalUnits'] ?? 0) as int,
+      code: json['manifest_code']?.toString() ?? json['code']?.toString() ?? '',
+      supplierId: int.tryParse(
+            (json['supplier_id'] ?? supplierMap?['id'] ?? '').toString(),
+          ) ??
+          0,
+      supplierName: supplierMap?['name']?.toString() ??
+          json['supplier_name']?.toString() ??
+          'Supplier Master',
+      totalUnits: int.tryParse(json['total_units']?.toString() ?? '') ??
+          itemList.fold(0, (sum, i) => sum + i.expectedQty),
       status: InboundStatus.fromString(json['status']?.toString()),
       items: itemList,
-      startedAt: json['started_at']?.toString() ?? json['startedAt']?.toString(),
-      completedAt: json['completed_at']?.toString() ?? json['completedAt']?.toString(),
-      truckPlate: json['truck_plate']?.toString() ?? json['truckPlate']?.toString(),
-      driverName: json['driver_name']?.toString() ?? json['driverName']?.toString(),
-      isAdhoc: (json['is_adhoc'] ?? json['isAdhoc'] ?? false) as bool,
+      totalSkus: totalSkus > 0 ? totalSkus : itemList.length,
+      isAdhoc: json['is_adhoc'] == true || json['is_adhoc']?.toString() == '1',
     );
   }
-
-  Map<String, dynamic> toJson() => {
-    'code': code,
-    'supplier': supplier,
-    'warehouse': warehouse,
-    'dock_bay': dockBay,
-    'total_units': totalUnits,
-    'status': status.label,
-    'items': items.map((e) => e.toJson()).toList(),
-    'started_at': startedAt,
-    'completed_at': completedAt,
-    'truck_plate': truckPlate,
-    'driver_name': driverName,
-    'is_adhoc': isAdhoc,
-  };
-
-  int get scannedUnits =>
-      items.fold(0, (sum, item) => sum + item.totalScanned);
-
-  int get goodUnits =>
-      items.fold(0, (sum, item) => sum + item.goodQty);
-
-  int get damagedUnits =>
-      items.fold(0, (sum, item) => sum + item.damagedQty);
-
-  double get progressPercentage {
-    if (totalUnits == 0) return 0.0;
-    return (scannedUnits / totalUnits).clamp(0.0, 1.0);
-  }
-
-  bool get isFullyCompleted => scannedUnits >= totalUnits;
-}
-
-class PutawayRequest {
-  final String manifestCode;
-  final String itemId;
-  final int goodQty;
-  final int damagedQty;
-  final String? targetRack;
-  final String? notes;
-
-  const PutawayRequest({
-    required this.manifestCode,
-    required this.itemId,
-    required this.goodQty,
-    required this.damagedQty,
-    this.targetRack,
-    this.notes,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'manifest_code': manifestCode,
-    'item_id': itemId,
-    'good_qty': goodQty,
-    'damaged_qty': damagedQty,
-    'target_rack': targetRack,
-    'notes': notes,
-  };
 }
 
 class InboundStats {
@@ -294,4 +243,71 @@ class InboundStats {
   final int inProgress;
   final int completed;
   final int hold;
+
+  factory InboundStats.fromJson(
+    Map<String, dynamic> json, {
+    required List<InboundManifest> manifests,
+  }) {
+    int number(Iterable<String> keys, int fallback) {
+      for (final key in keys) {
+        final value = int.tryParse(json[key]?.toString() ?? '');
+        if (value != null) return value;
+      }
+      return fallback;
+    }
+
+    return InboundStats(
+      todayTotal: number(
+        ['total', 'today_total', 'today', 'total_today'],
+        manifests.length,
+      ),
+      inProgress: number(
+        ['pending', 'in_progress', 'processing', 'receiving'],
+        manifests
+            .where((m) =>
+                m.status == InboundStatus.receiving ||
+                m.status == InboundStatus.draft)
+            .length,
+      ),
+      completed: number(
+        ['completed', 'closed', 'finished'],
+        manifests.where((m) => m.status == InboundStatus.closed).length,
+      ),
+      hold: number(
+        ['hold', 'on_hold'],
+        manifests.where((m) => m.status == InboundStatus.hold).length,
+      ),
+    );
+  }
+}
+
+class InboundLocation {
+  const InboundLocation({
+    required this.id,
+    required this.rackCode,
+    this.zone,
+  });
+
+  final int id;
+  final String rackCode;
+  final String? zone;
+
+  factory InboundLocation.fromJson(Map<String, dynamic> json) =>
+      InboundLocation(
+        id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+        rackCode: json['rack_code']?.toString() ?? '',
+        zone: json['zone']?.toString(),
+      );
+}
+
+class InboundManifestDetail {
+  const InboundManifestDetail({
+    required this.manifest,
+    required this.items,
+    required this.locations,
+  });
+
+  final InboundManifest manifest;
+  final List<InboundItem> items;
+  final List<InboundLocation> locations;
 }

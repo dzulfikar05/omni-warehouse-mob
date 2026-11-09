@@ -52,12 +52,12 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
     super.dispose();
   }
 
-  void _showCreateManifestModal({bool isAdhoc = false}) {
+  void _showCreateManifestModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => CreateManifestModal(initialIsAdhoc: isAdhoc),
+      builder: (ctx) => const CreateManifestModal(),
     );
   }
 
@@ -67,7 +67,8 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
     final stats = ref.watch(inboundStatsProvider);
 
     final filteredManifests = manifests.where((m) {
-      final matchesSearch = _searchQuery.isEmpty ||
+      final matchesSearch =
+          _searchQuery.isEmpty ||
           m.code.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           m.supplierName.toLowerCase().contains(_searchQuery.toLowerCase());
 
@@ -94,48 +95,20 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                 const SizedBox(height: 10),
                 _buildFilterChips(),
                 const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 1,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _showCreateManifestModal(isAdhoc: true),
-                        icon: const Icon(Icons.bolt_rounded),
-                        label: const Text('Inbound Ad-hoc'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                          ),
-                          backgroundColor: AppColors.primaryLight,
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(
-                            color: AppColors.primaryBorder,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _showCreateManifestModal,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('PO Manifest'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 1,
-                      child: ElevatedButton.icon(
-                        onPressed: _showCreateManifestModal,
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('PO Manifest'),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -208,8 +181,11 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
         children: [
           const Row(
             children: [
-              Icon(Icons.move_to_inbox_rounded,
-                  color: AppColors.primary, size: 20),
+              Icon(
+                Icons.move_to_inbox_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
               SizedBox(width: 10),
               Text(
                 'Menu Inbound',
@@ -250,14 +226,21 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
     return Expanded(
       child: Column(
         children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 10, color: AppColors.textSecondary)),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: valueColor)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: valueColor,
+            ),
+          ),
         ],
       ),
     );
@@ -276,11 +259,16 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
         onChanged: (val) => setState(() => _searchQuery = val),
         decoration: InputDecoration(
           hintText: 'Cari No. PO, Supplier...',
-          prefixIcon:
-              Icon(Icons.search_rounded, size: 20, color: AppColors.textMuted),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: AppColors.textMuted,
+          ),
           isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.border),
@@ -364,18 +352,16 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(
-                manifest.isAdhoc
-                    ? Icons.bolt_rounded
-                    : Icons.description_outlined,
+              const Icon(
+                Icons.description_outlined,
                 size: 15,
                 color: AppColors.textMuted,
               ),
               const SizedBox(width: 5),
               Expanded(
-                child: Text(
-                  manifest.isAdhoc ? 'Inbound Ad-hoc' : 'PO Manifest',
-                  style: const TextStyle(
+                child: const Text(
+                  'PO Manifest',
+                  style: TextStyle(
                     fontSize: 11,
                     color: AppColors.textSecondary,
                   ),
@@ -399,9 +385,7 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                 minimumSize: const Size.fromHeight(50),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              child: const Text(
-                'Buka Manifes',
-              ),
+              child: const Text('Buka Manifes'),
             ),
           ),
         ],
@@ -410,18 +394,18 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
   }
 
   Widget _buildStatusBadge(InboundStatus status) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: status.bg,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          status.label,
-          style: TextStyle(
-            color: status.color,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: status.bg,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      status.label,
+      style: TextStyle(
+        color: status.color,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }

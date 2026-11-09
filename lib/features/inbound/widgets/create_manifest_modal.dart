@@ -9,9 +9,7 @@ import '../inbound_model.dart';
 import '../inbound_repository.dart';
 
 class CreateManifestModal extends ConsumerStatefulWidget {
-  const CreateManifestModal({super.key, this.initialIsAdhoc = false});
-
-  final bool initialIsAdhoc;
+  const CreateManifestModal({super.key});
 
   @override
   ConsumerState<CreateManifestModal> createState() =>
@@ -21,7 +19,6 @@ class CreateManifestModal extends ConsumerStatefulWidget {
 class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
   bool _isLoadingOptions = true;
   bool _isSubmitting = false;
-  bool _isAdhoc = false;
 
   List<InboundSupplier> _suppliers = const [];
   List<InboundProductMaster> _products = const [];
@@ -31,7 +28,6 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
   @override
   void initState() {
     super.initState();
-    _isAdhoc = widget.initialIsAdhoc;
     _fetchMasterData();
   }
 
@@ -48,8 +44,9 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
     final slug = authState.tenantSlug ?? authState.tenantName ?? 'demo-tenant';
 
     try {
-      final options =
-          await ref.read(inboundDataSourceProvider).getMasterOptions(slug);
+      final options = await ref
+          .read(inboundDataSourceProvider)
+          .getMasterOptions(slug);
       if (!mounted) return;
       setState(() {
         _suppliers = options.suppliers;
@@ -129,18 +126,17 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
 
     setState(() => _isSubmitting = true);
     try {
-      await ref.read(inboundRepositoryProvider.notifier).createManifest(
+      await ref
+          .read(inboundRepositoryProvider.notifier)
+          .createManifest(
             supplierId: _selectedSupplier!.id,
             items: payloadItems,
-            isAdhoc: _isAdhoc,
           );
       if (!mounted) return;
       Navigator.pop(context);
       OmniSnackbar.show(
         context,
-        message: _isAdhoc
-            ? 'Draf inbound ad-hoc berhasil dibuat.'
-            : 'Manifes PO inbound berhasil dibuat.',
+        message: 'Manifes PO inbound berhasil dibuat.',
         icon: Icons.check_circle_rounded,
       );
     } catch (error) {
@@ -206,11 +202,9 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _isAdhoc
-                                  ? 'Buat Inbound Ad-hoc'
-                                  : 'Buat Manifes Inbound PO',
-                              style: const TextStyle(
+                            const Text(
+                              'Buat Manifes Inbound PO',
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.textPrimary,
@@ -229,29 +223,12 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                       ),
                       IconButton(
                         tooltip: 'Tutup',
-                        onPressed:
-                            _isSubmitting ? null : () => Navigator.pop(context),
+                        onPressed: _isSubmitting
+                            ? null
+                            : () => Navigator.pop(context),
                         icon: const Icon(Icons.close_rounded),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 14),
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(
-                        value: false,
-                        label: Text('PO Resmi'),
-                      ),
-                      ButtonSegment(
-                        value: true,
-                        label: Text('Ad-hoc'),
-                      ),
-                    ],
-                    selected: {_isAdhoc},
-                    onSelectionChanged: _isSubmitting
-                        ? null
-                        : (selection) =>
-                            setState(() => _isAdhoc = selection.first),
                   ),
                   const SizedBox(height: 18),
                   Flexible(
@@ -267,8 +244,9 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                             hint: const Text('Pilih Supplier...'),
                             items: _suppliers
                                 .map(
-                                  (supplier) =>
-                                      DropdownMenuItem<InboundSupplier>(
+                                  (
+                                    supplier,
+                                  ) => DropdownMenuItem<InboundSupplier>(
                                     value: supplier,
                                     child: Text(
                                       supplier.code.isNotEmpty &&
@@ -284,9 +262,8 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                 .toList(),
                             onChanged: _isSubmitting
                                 ? null
-                                : (value) => setState(
-                                      () => _selectedSupplier = value,
-                                    ),
+                                : (value) =>
+                                      setState(() => _selectedSupplier = value),
                             decoration: _inputDecoration(),
                           ),
                           const SizedBox(height: 16),
@@ -307,11 +284,9 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            _isAdhoc
-                                                ? 'Daftar Barang Inbound'
-                                                : 'Daftar Barang Acuan PO',
-                                            style: const TextStyle(
+                                          const Text(
+                                            'Daftar Barang Acuan PO',
+                                            style: TextStyle(
                                               fontSize: 13,
                                               fontWeight: FontWeight.w700,
                                               color: AppColors.textPrimary,
@@ -331,8 +306,8 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                     TextButton.icon(
                                       onPressed:
                                           _isSubmitting || _products.isEmpty
-                                              ? null
-                                              : _addItemRow,
+                                          ? null
+                                          : _addItemRow,
                                       icon: const Icon(Icons.add, size: 17),
                                       label: const Text('Tambah'),
                                     ),
@@ -352,14 +327,16 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                     final index = entry.key;
                                     final item = entry.value;
                                     return Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 10),
+                                      padding: const EdgeInsets.only(
+                                        bottom: 10,
+                                      ),
                                       child: Container(
                                         padding: const EdgeInsets.all(10),
                                         decoration: BoxDecoration(
                                           color: AppColors.surface,
-                                          borderRadius:
-                                              BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                           border: Border.all(
                                             color: AppColors.border,
                                           ),
@@ -369,44 +346,48 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             DropdownButtonFormField<
-                                                InboundProductMaster>(
+                                              InboundProductMaster
+                                            >(
                                               initialValue: item.product,
                                               isExpanded: true,
                                               items: _products
                                                   .map(
-                                                    (product) => DropdownMenuItem<
-                                                        InboundProductMaster>(
-                                                      value: product,
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          Text(
-                                                            product.sku,
-                                                            softWrap: true,
-                                                            style:
-                                                                const TextStyle(
-                                                              fontSize: 12,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                            ),
+                                                    (product) =>
+                                                        DropdownMenuItem<
+                                                          InboundProductMaster
+                                                        >(
+                                                          value: product,
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .start,
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Text(
+                                                                product.sku,
+                                                                softWrap: true,
+                                                                style: const TextStyle(
+                                                                  fontSize: 12,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                product.name,
+                                                                softWrap: true,
+                                                                maxLines: 2,
+                                                                style:
+                                                                    const TextStyle(
+                                                                      fontSize:
+                                                                          11,
+                                                                    ),
+                                                              ),
+                                                            ],
                                                           ),
-                                                          Text(
-                                                            product.name,
-                                                            softWrap: true,
-                                                            maxLines: 2,
-                                                            style:
-                                                                const TextStyle(
-                                                              fontSize: 11,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
+                                                        ),
                                                   )
                                                   .toList(),
                                               selectedItemBuilder: (context) =>
@@ -423,8 +404,8 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                                                     .ellipsis,
                                                             style:
                                                                 const TextStyle(
-                                                              fontSize: 12,
-                                                            ),
+                                                                  fontSize: 12,
+                                                                ),
                                                           ),
                                                         ),
                                                       )
@@ -433,8 +414,10 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                                   ? null
                                                   : (value) {
                                                       if (value != null) {
-                                                        setState(() => item
-                                                            .product = value);
+                                                        setState(
+                                                          () => item.product =
+                                                              value,
+                                                        );
                                                       }
                                                     },
                                               decoration: _inputDecoration(
@@ -473,19 +456,20 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                                             TextAlign.center,
                                                         decoration:
                                                             _inputDecoration(
-                                                          hint: 'Qty',
-                                                        ),
+                                                              hint: 'Qty',
+                                                            ),
                                                       ),
                                                     ),
                                                     IconButton(
                                                       tooltip: 'Hapus item',
-                                                      onPressed: _isSubmitting ||
+                                                      onPressed:
+                                                          _isSubmitting ||
                                                               _items.length == 1
                                                           ? null
                                                           : () =>
-                                                              _removeItemRow(
-                                                                index,
-                                                              ),
+                                                                _removeItemRow(
+                                                                  index,
+                                                                ),
                                                       icon: const Icon(
                                                         Icons
                                                             .delete_outline_rounded,
@@ -527,7 +511,8 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                       Expanded(
                         flex: 2,
                         child: ElevatedButton.icon(
-                          onPressed: _isSubmitting ||
+                          onPressed:
+                              _isSubmitting ||
                                   _suppliers.isEmpty ||
                                   _products.isEmpty
                               ? null
@@ -549,9 +534,7 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                   ),
                                 )
                               : const Icon(Icons.check_rounded, size: 18),
-                          label: Text(
-                            _isAdhoc ? 'Buat Ad-hoc' : 'Buat Manifes PO',
-                          ),
+                          label: const Text('Buat Manifes PO'),
                         ),
                       ),
                     ],
@@ -563,26 +546,25 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
   }
 
   InputDecoration _inputDecoration({String? hint}) => InputDecoration(
-        hintText: hint,
-        isDense: true,
-        filled: true,
-        fillColor: AppColors.surface,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 11, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-      );
+    hintText: hint,
+    isDense: true,
+    filled: true,
+    fillColor: AppColors.surface,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 12),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: AppColors.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: AppColors.border),
+    ),
+  );
 }
 
 class _ManifestItemDraft {
   _ManifestItemDraft(this.product)
-      : quantityController = TextEditingController(text: '10');
+    : quantityController = TextEditingController(text: '10');
 
   InboundProductMaster product;
   final TextEditingController quantityController;
@@ -595,11 +577,11 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        label,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-        ),
-      );
+    label,
+    style: const TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: AppColors.textPrimary,
+    ),
+  );
 }

@@ -145,16 +145,19 @@ class InboundItem {
 
     return InboundItem(
       id: json['id']?.toString() ?? '',
-      productId: int.tryParse(
+      productId:
+          int.tryParse(
             (json['sku_id'] ?? json['product_id'] ?? productMap?['id'] ?? '')
                 .toString(),
           ) ??
           0,
       sku: json['sku']?.toString() ?? productMap?['sku']?.toString() ?? '',
-      barcode: json['barcode']?.toString() ??
+      barcode:
+          json['barcode']?.toString() ??
           productMap?['barcode']?.toString() ??
           '',
-      name: json['product_name']?.toString() ??
+      name:
+          json['product_name']?.toString() ??
           json['name']?.toString() ??
           productMap?['name']?.toString() ??
           'Barang Inbound',
@@ -163,7 +166,8 @@ class InboundItem {
       ),
       goodQty: _asInt(json['good_qty'] ?? json['goodQty']),
       damagedQty: _asInt(json['damaged_qty'] ?? json['damagedQty']),
-      targetRack: json['target_rack']?.toString() ??
+      targetRack:
+          json['target_rack']?.toString() ??
           (json['location'] is Map
               ? json['location']['rack_code']?.toString()
               : null),
@@ -184,7 +188,6 @@ class InboundManifest {
     required this.status,
     required this.items,
     this.totalSkus = 0,
-    this.isAdhoc = false,
   });
 
   final String code;
@@ -194,7 +197,6 @@ class InboundManifest {
   InboundStatus status;
   final List<InboundItem> items;
   final int totalSkus;
-  final bool isAdhoc;
 
   factory InboundManifest.fromJson(Map<String, dynamic> json) {
     final supplierMap = json['supplier'] is Map ? json['supplier'] : null;
@@ -208,25 +210,29 @@ class InboundManifest {
         }
       }
     }
-    final totalSkus = int.tryParse(
-            (json['total_skus'] ?? json['total_sku'])?.toString() ?? '') ??
+    final totalSkus =
+        int.tryParse(
+          (json['total_skus'] ?? json['total_sku'])?.toString() ?? '',
+        ) ??
         0;
 
     return InboundManifest(
       code: json['manifest_code']?.toString() ?? json['code']?.toString() ?? '',
-      supplierId: int.tryParse(
+      supplierId:
+          int.tryParse(
             (json['supplier_id'] ?? supplierMap?['id'] ?? '').toString(),
           ) ??
           0,
-      supplierName: supplierMap?['name']?.toString() ??
+      supplierName:
+          supplierMap?['name']?.toString() ??
           json['supplier_name']?.toString() ??
           'Supplier Master',
-      totalUnits: int.tryParse(json['total_units']?.toString() ?? '') ??
+      totalUnits:
+          int.tryParse(json['total_units']?.toString() ?? '') ??
           itemList.fold(0, (sum, i) => sum + i.expectedQty),
       status: InboundStatus.fromString(json['status']?.toString()),
       items: itemList,
       totalSkus: totalSkus > 0 ? totalSkus : itemList.length,
-      isAdhoc: json['is_adhoc'] == true || json['is_adhoc']?.toString() == '1',
     );
   }
 }
@@ -257,36 +263,37 @@ class InboundStats {
     }
 
     return InboundStats(
-      todayTotal: number(
-        ['total', 'today_total', 'today', 'total_today'],
-        manifests.length,
-      ),
+      todayTotal: number([
+        'total',
+        'today_total',
+        'today',
+        'total_today',
+      ], manifests.length),
       inProgress: number(
         ['pending', 'in_progress', 'processing', 'receiving'],
         manifests
-            .where((m) =>
-                m.status == InboundStatus.receiving ||
-                m.status == InboundStatus.draft)
+            .where(
+              (m) =>
+                  m.status == InboundStatus.receiving ||
+                  m.status == InboundStatus.draft,
+            )
             .length,
       ),
-      completed: number(
-        ['completed', 'closed', 'finished'],
-        manifests.where((m) => m.status == InboundStatus.closed).length,
-      ),
-      hold: number(
-        ['hold', 'on_hold'],
-        manifests.where((m) => m.status == InboundStatus.hold).length,
-      ),
+      completed: number([
+        'completed',
+        'closed',
+        'finished',
+      ], manifests.where((m) => m.status == InboundStatus.closed).length),
+      hold: number([
+        'hold',
+        'on_hold',
+      ], manifests.where((m) => m.status == InboundStatus.hold).length),
     );
   }
 }
 
 class InboundLocation {
-  const InboundLocation({
-    required this.id,
-    required this.rackCode,
-    this.zone,
-  });
+  const InboundLocation({required this.id, required this.rackCode, this.zone});
 
   final int id;
   final String rackCode;

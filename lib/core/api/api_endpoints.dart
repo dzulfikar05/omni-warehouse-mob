@@ -16,7 +16,6 @@ class ApiEndpoints {
   static String inboundDetail(String slug, String code) =>
       '/$slug/inbound/manifests/$code';
   static String inboundCreate(String slug) => '/$slug/inbound/store';
-  static String inboundAdhoc(String slug) => '/$slug/inbound/adhoc';
   static String inboundVerifyBarcode(String slug) => '/$slug/inbound/scan-item';
   static String inboundPutaway(String slug) => '/$slug/inbound/putaway';
   static String inboundCommit(String slug) => '/$slug/inbound/commit';
@@ -24,15 +23,17 @@ class ApiEndpoints {
   static String inboundResume(String slug) => '/$slug/inbound/resume';
   static String inboundOptions(String slug) => '/$slug/inbound/options';
   // OUTBOUND (PENGIRIMAN BARANG)
-  static String outboundList(String slug) => '/$slug/transactions/outbound';
+  static String outboundList(String slug) => '/$slug/outbound/';
   static String outboundDetail(String slug, String code) =>
-      '/$slug/transactions/outbound/$code';
+      '/$slug/outbound/manifests/$code';
+  static String outboundCreate(String slug) => '/$slug/outbound/store';
+  static String outboundOptions(String slug) => '/$slug/outbound/options';
   static String outboundVerifyBarcode(String slug) =>
-      '/$slug/transactions/outbound/verify-barcode';
-  static String outboundPacking(String slug) =>
-      '/$slug/transactions/outbound/packing';
-  static String outboundCommit(String slug) =>
-      '/$slug/transactions/outbound/commit';
+      '/$slug/outbound/verify-barcode';
+  static String outboundPicking(String slug) => '/$slug/outbound/picking';
+  static String outboundCommit(String slug) => '/$slug/outbound/commit';
+  static String outboundHold(String slug) => '/$slug/outbound/hold';
+  static String outboundResume(String slug) => '/$slug/outbound/resume';
 
   // STOCK TRANSFER (MUTASI RAK / GUDANG)
   static String transferList(String slug) =>

@@ -24,28 +24,24 @@ void main() {
       final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
       RequestOptions? capturedRequest;
       final repository = ApiInboundRepository(
-        _respondWith(
-          dio,
-          {
-            'success': true,
-            'data': {
-              'suppliers': [
-                {'id': 3, 'code': '3', 'name': 'Supplier A'},
-              ],
-              'products': [
-                {
-                  'id': 5,
-                  'sku_id': 17,
-                  'sku': 'SKU-17',
-                  'barcode': '0017',
-                  'name': 'Product seventeen',
-                },
-              ],
-              'available_racks': ['RACK-A1-01'],
-            },
+        _respondWith(dio, {
+          'success': true,
+          'data': {
+            'suppliers': [
+              {'id': 3, 'code': '3', 'name': 'Supplier A'},
+            ],
+            'products': [
+              {
+                'id': 5,
+                'sku_id': 17,
+                'sku': 'SKU-17',
+                'barcode': '0017',
+                'name': 'Product seventeen',
+              },
+            ],
+            'available_racks': ['RACK-A1-01'],
           },
-          onRequest: (request) => capturedRequest = request,
-        ),
+        }, onRequest: (request) => capturedRequest = request),
       );
 
       final options = await repository.getMasterOptions('tenant-a');
@@ -57,112 +53,65 @@ void main() {
       expect(options.availableRacks, ['RACK-A1-01']);
     });
 
-    test('posts both product and SKU fields required by createManifest',
-        () async {
-      final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
-      RequestOptions? capturedRequest;
-      final repository = ApiInboundRepository(
-        _respondWith(
-          dio,
-          {
+    test(
+      'posts both product and SKU fields required by createManifest',
+      () async {
+        final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+        RequestOptions? capturedRequest;
+        final repository = ApiInboundRepository(
+          _respondWith(dio, {
             'success': true,
-            'data': {'manifest_code': 'TX-INB-123'}
-          },
-          onRequest: (request) => capturedRequest = request,
-        ),
-      );
+            'data': {'manifest_code': 'TX-INB-123'},
+          }, onRequest: (request) => capturedRequest = request),
+        );
 
-      await repository.createManifest(
-        'tenant-a',
-        supplierId: 3,
-        items: [
-          {
-            'product_id': 5,
-            'sku_id': 17,
-            'expected_qty': 10,
-            'po_qty': 10,
-          },
-        ],
-        isAdhoc: false,
-      );
+        await repository.createManifest(
+          'tenant-a',
+          supplierId: 3,
+          items: [
+            {'product_id': 5, 'sku_id': 17, 'expected_qty': 10, 'po_qty': 10},
+          ],
+        );
 
-      expect(capturedRequest?.method, 'POST');
-      expect(capturedRequest?.path, '/tenant-a/inbound/store');
-      expect(capturedRequest?.data, {
-        'supplier_id': 3,
-        'items': [
-          {
-            'product_id': 5,
-            'sku_id': 17,
-            'expected_qty': 10,
-            'po_qty': 10,
-          },
-        ],
-      });
-    });
-
-    test('posts ad-hoc manifests to the ad-hoc endpoint', () async {
-      final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
-      RequestOptions? capturedRequest;
-      final repository = ApiInboundRepository(
-        _respondWith(
-          dio,
-          {
-            'success': true,
-            'data': {'manifest_code': 'TX-INB-123'}
-          },
-          onRequest: (request) => capturedRequest = request,
-        ),
-      );
-
-      await repository.createManifest(
-        'tenant-a',
-        supplierId: 3,
-        items: const [
-          {
-            'product_id': 5,
-            'sku_id': 17,
-            'expected_qty': 2,
-            'po_qty': 2,
-          },
-        ],
-        isAdhoc: true,
-      );
-
-      expect(capturedRequest?.path, '/tenant-a/inbound/adhoc');
-    });
+        expect(capturedRequest?.method, 'POST');
+        expect(capturedRequest?.path, '/tenant-a/inbound/store');
+        expect(capturedRequest?.data, {
+          'supplier_id': 3,
+          'items': [
+            {'product_id': 5, 'sku_id': 17, 'expected_qty': 10, 'po_qty': 10},
+          ],
+        });
+      },
+    );
 
     test('reads Laravel paginator and backend summary keys', () async {
       final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
       final repository = ApiInboundRepository(
-        _respondWith(
-          dio,
-          {
-            'success': true,
-            'data': {
-              'summary': {
-                'total': 4,
-                'pending': 2,
-                'completed': 2,
-                'total_units': 36,
-              },
-              'statuses': ['DRAFT', 'ON_HOLD', 'COMMITTED'],
-              'manifests': {
-                'current_page': 1,
-                'data': [
-                  {
-                    'manifest_code': 'TX-INB-123',
-                    'status': 'ON_HOLD',
-                    'supplier_name': 'Supplier A',
-                    'total_skus': 3,
-                    'total_units': 12,
-                  },
-                ],
-                'last_page': 1,
-              },
+        _respondWith(dio, {
+          'success': true,
+          'data': {
+            'summary': {
+              'total': 4,
+              'pending': 2,
+              'completed': 2,
+              'total_units': 36,
+            },
+            'statuses': ['DRAFT', 'ON_HOLD', 'COMMITTED'],
+            'manifests': {
+              'current_page': 1,
+              'data': [
+                {
+                  'manifest_code': 'TX-INB-123',
+                  'status': 'ON_HOLD',
+                  'supplier_name': 'Supplier A',
+                  'total_skus': 3,
+                  'total_units': 12,
+                },
+              ],
+              'last_page': 1,
             },
           },
-        ),
+        }),
       );
 
       final result = await repository.getManifests('tenant-a');
@@ -176,13 +125,12 @@ void main() {
       expect(result.stats.completed, 2);
     });
 
-    test('parses transaction item field names returned by inbound detail',
-        () async {
-      final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
-      final repository = ApiInboundRepository(
-        _respondWith(
-          dio,
-          {
+    test(
+      'parses transaction item field names returned by inbound detail',
+      () async {
+        final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+        final repository = ApiInboundRepository(
+          _respondWith(dio, {
             'success': true,
             'data': {
               'manifest': {
@@ -208,35 +156,34 @@ void main() {
                 {'id': 7, 'rack_code': 'RACK-A1-01', 'zone': 'A1'},
               ],
             },
-          },
-        ),
-      );
+          }),
+        );
 
-      final result =
-          await repository.getManifestDetail('tenant-a', 'TX-INB-123');
-      final item = result.items.single;
+        final result = await repository.getManifestDetail(
+          'tenant-a',
+          'TX-INB-123',
+        );
+        final item = result.items.single;
 
-      expect(result.manifest.code, 'TX-INB-123');
-      expect(item.id, '42');
-      expect(item.productId, 9);
-      expect(item.name, 'Product nine');
-      expect(item.expectedQty, 10);
-      expect(item.goodQty, 2);
-      expect(item.damagedQty, 1);
-      expect(result.locations.single.rackCode, 'RACK-A1-01');
-    });
+        expect(result.manifest.code, 'TX-INB-123');
+        expect(item.id, '42');
+        expect(item.productId, 9);
+        expect(item.name, 'Product nine');
+        expect(item.expectedQty, 10);
+        expect(item.goodQty, 2);
+        expect(item.damagedQty, 1);
+        expect(result.locations.single.rackCode, 'RACK-A1-01');
+      },
+    );
 
     test('accepts successful barcode response with null data', () async {
       final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
       final repository = ApiInboundRepository(
-        _respondWith(
-          dio,
-          {
-            'success': true,
-            'message': 'Barcode berhasil diverifikasi.',
-            'data': null,
-          },
-        ),
+        _respondWith(dio, {
+          'success': true,
+          'message': 'Barcode berhasil diverifikasi.',
+          'data': null,
+        }),
       );
 
       await expectLater(
@@ -249,69 +196,68 @@ void main() {
       );
     });
 
-    test('uses the controller route and payload for receiving operations',
-        () async {
-      final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
-      final requests = <RequestOptions>[];
-      final repository = ApiInboundRepository(
-        _respondWith(
-          dio,
-          {'success': true, 'message': 'ok', 'data': null},
-          onRequest: requests.add,
-        ),
-      );
+    test(
+      'uses the controller route and payload for receiving operations',
+      () async {
+        final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+        final requests = <RequestOptions>[];
+        final repository = ApiInboundRepository(
+          _respondWith(dio, {
+            'success': true,
+            'message': 'ok',
+            'data': null,
+          }, onRequest: requests.add),
+        );
 
-      await repository.verifyBarcode(
-        'tenant-a',
-        manifestCode: 'TX-INB-123',
-        barcode: '0123456789',
-      );
-      await repository.submitPutaway(
-        'tenant-a',
-        manifestCode: 'TX-INB-123',
-        itemId: 42,
-        goodQty: 8,
-        damagedQty: 2,
-        targetRack: 'RACK-A1-01',
-        damageNote: 'Box dented',
-      );
-      await repository.commitManifest('tenant-a', 'TX-INB-123');
-      await repository.holdManifest(
-        'tenant-a',
-        'TX-INB-123',
-        reason: 'Menunggu pemeriksaan',
-      );
-      await repository.resumeManifest('tenant-a', 'TX-INB-123');
+        await repository.verifyBarcode(
+          'tenant-a',
+          manifestCode: 'TX-INB-123',
+          barcode: '0123456789',
+        );
+        await repository.submitPutaway(
+          'tenant-a',
+          manifestCode: 'TX-INB-123',
+          itemId: 42,
+          goodQty: 8,
+          damagedQty: 2,
+          targetRack: 'RACK-A1-01',
+          damageNote: 'Box dented',
+        );
+        await repository.commitManifest('tenant-a', 'TX-INB-123');
+        await repository.holdManifest(
+          'tenant-a',
+          'TX-INB-123',
+          reason: 'Menunggu pemeriksaan',
+        );
+        await repository.resumeManifest('tenant-a', 'TX-INB-123');
 
-      expect(
-        requests.map((request) => request.path),
-        [
+        expect(requests.map((request) => request.path), [
           '/tenant-a/inbound/scan-item',
           '/tenant-a/inbound/putaway',
           '/tenant-a/inbound/commit',
           '/tenant-a/inbound/hold',
           '/tenant-a/inbound/resume',
-        ],
-      );
-      expect(requests[0].data, {
-        'manifest_code': 'TX-INB-123',
-        'barcode': '0123456789',
-      });
-      expect(requests[1].data, {
-        'manifest_code': 'TX-INB-123',
-        'item_id': 42,
-        'good_qty': 8,
-        'damaged_qty': 2,
-        'target_rack': 'RACK-A1-01',
-        'damage_note': 'Box dented',
-      });
-      expect(requests[2].data, {'manifest_code': 'TX-INB-123'});
-      expect(requests[3].data, {
-        'manifest_code': 'TX-INB-123',
-        'reason': 'Menunggu pemeriksaan',
-      });
-      expect(requests[4].data, {'manifest_code': 'TX-INB-123'});
-    });
+        ]);
+        expect(requests[0].data, {
+          'manifest_code': 'TX-INB-123',
+          'barcode': '0123456789',
+        });
+        expect(requests[1].data, {
+          'manifest_code': 'TX-INB-123',
+          'item_id': 42,
+          'good_qty': 8,
+          'damaged_qty': 2,
+          'target_rack': 'RACK-A1-01',
+          'damage_note': 'Box dented',
+        });
+        expect(requests[2].data, {'manifest_code': 'TX-INB-123'});
+        expect(requests[3].data, {
+          'manifest_code': 'TX-INB-123',
+          'reason': 'Menunggu pemeriksaan',
+        });
+        expect(requests[4].data, {'manifest_code': 'TX-INB-123'});
+      },
+    );
   });
 }
 
@@ -324,12 +270,7 @@ Dio _respondWith(
     InterceptorsWrapper(
       onRequest: (options, handler) {
         onRequest?.call(options);
-        handler.resolve(
-          Response<dynamic>(
-            requestOptions: options,
-            data: body,
-          ),
-        );
+        handler.resolve(Response<dynamic>(requestOptions: options, data: body));
       },
     ),
   );

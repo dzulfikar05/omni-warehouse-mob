@@ -37,7 +37,6 @@ abstract class InboundRepository {
     String slug, {
     required int supplierId,
     required List<Map<String, int>> items,
-    required bool isAdhoc,
   });
   Future<void> verifyBarcode(
     String slug, {
@@ -83,14 +82,18 @@ class ApiInboundRepository implements InboundRepository {
         'Format master data inbound tidak valid.',
       );
       final suppliers = (data['suppliers'] as List? ?? [])
-          .map((item) => InboundSupplier.fromJson(
-                Map<String, dynamic>.from(item as Map),
-              ))
+          .map(
+            (item) => InboundSupplier.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .toList();
       final products = (data['products'] as List? ?? [])
-          .map((item) => InboundProductMaster.fromJson(
-                Map<String, dynamic>.from(item as Map),
-              ))
+          .map(
+            (item) => InboundProductMaster.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .toList();
 
       return InboundMasterOptions(
@@ -115,15 +118,17 @@ class ApiInboundRepository implements InboundRepository {
         ApiEndpoints.inboundList(slug),
         queryParameters: filters,
       );
-      final envelope =
-          _asMap(response.data, 'Format daftar inbound tidak valid.');
+      final envelope = _asMap(
+        response.data,
+        'Format daftar inbound tidak valid.',
+      );
       final data = _asMap(envelope['data'], 'Data daftar inbound tidak valid.');
       final rawManifestPage = data['manifests'];
       final rawManifests = rawManifestPage is List
           ? rawManifestPage
           : rawManifestPage is Map
-              ? rawManifestPage['data']
-              : null;
+          ? rawManifestPage['data']
+          : null;
 
       if (rawManifests is! List) {
         throw const ServerException(
@@ -132,9 +137,11 @@ class ApiInboundRepository implements InboundRepository {
       }
 
       final manifests = rawManifests
-          .map((item) => InboundManifest.fromJson(
-                Map<String, dynamic>.from(item as Map),
-              ))
+          .map(
+            (item) => InboundManifest.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .toList();
       final rawSummary = data['summary'];
       final summary = rawSummary is Map
@@ -157,22 +164,29 @@ class ApiInboundRepository implements InboundRepository {
   ) async {
     try {
       final response = await _dio.get(ApiEndpoints.inboundDetail(slug, code));
-      final envelope =
-          _asMap(response.data, 'Format detail inbound tidak valid.');
+      final envelope = _asMap(
+        response.data,
+        'Format detail inbound tidak valid.',
+      );
       final data = _asMap(envelope['data'], 'Detail manifes tidak tersedia.');
-      final manifestData =
-          _asMap(data['manifest'], 'Data manifes tidak valid.');
+      final manifestData = _asMap(
+        data['manifest'],
+        'Data manifes tidak valid.',
+      );
       final itemData = data['items'];
       final locationData = data['available_locations'];
       final items = (itemData is List ? itemData : const [])
-          .map((item) => InboundItem.fromJson(
-                Map<String, dynamic>.from(item as Map),
-              ))
+          .map(
+            (item) =>
+                InboundItem.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
           .toList();
       final locations = (locationData is List ? locationData : const [])
-          .map((item) => InboundLocation.fromJson(
-                Map<String, dynamic>.from(item as Map),
-              ))
+          .map(
+            (item) => InboundLocation.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .where((location) => location.rackCode.isNotEmpty)
           .toList();
 
@@ -192,13 +206,10 @@ class ApiInboundRepository implements InboundRepository {
     String slug, {
     required int supplierId,
     required List<Map<String, int>> items,
-    required bool isAdhoc,
   }) async {
     try {
       await _dio.post(
-        isAdhoc
-            ? ApiEndpoints.inboundAdhoc(slug)
-            : ApiEndpoints.inboundCreate(slug),
+        ApiEndpoints.inboundCreate(slug),
         data: {'supplier_id': supplierId, 'items': items},
       );
     } on DioException catch (error) {
@@ -217,8 +228,10 @@ class ApiInboundRepository implements InboundRepository {
         ApiEndpoints.inboundVerifyBarcode(slug),
         data: {'manifest_code': manifestCode, 'barcode': barcode},
       );
-      final envelope =
-          _asMap(response.data, 'Format verifikasi barcode tidak valid.');
+      final envelope = _asMap(
+        response.data,
+        'Format verifikasi barcode tidak valid.',
+      );
       if (envelope['success'] != true) {
         throw ServerException(
           envelope['message']?.toString() ??
@@ -304,13 +317,13 @@ final inboundDataSourceProvider = Provider<InboundRepository>((ref) {
 
 class InboundNotifier extends StateNotifier<List<InboundManifest>> {
   InboundNotifier(this._repository, this._tenantSlug)
-      : stats = const InboundStats(
-          todayTotal: 0,
-          inProgress: 0,
-          completed: 0,
-          hold: 0,
-        ),
-        super(const []);
+    : stats = const InboundStats(
+        todayTotal: 0,
+        inProgress: 0,
+        completed: 0,
+        hold: 0,
+      ),
+      super(const []);
 
   final InboundRepository _repository;
   final String _tenantSlug;
@@ -325,23 +338,17 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
   Future<InboundManifestDetail> loadManifestDetail(String code) =>
       _repository.getManifestDetail(_tenantSlug, code);
 
-  Future<void> verifyBarcode(String code, String barcode) =>
-      _repository.verifyBarcode(
-        _tenantSlug,
-        manifestCode: code,
-        barcode: barcode,
-      );
+  Future<void> verifyBarcode(String code, String barcode) => _repository
+      .verifyBarcode(_tenantSlug, manifestCode: code, barcode: barcode);
 
   Future<void> createManifest({
     required int supplierId,
     required List<Map<String, int>> items,
-    required bool isAdhoc,
   }) async {
     await _repository.createManifest(
       _tenantSlug,
       supplierId: supplierId,
       items: items,
-      isAdhoc: isAdhoc,
     );
     await loadManifests();
   }
@@ -353,16 +360,15 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
     required int damagedQty,
     required String targetRack,
     String? damageNote,
-  }) =>
-      _repository.submitPutaway(
-        _tenantSlug,
-        manifestCode: manifestCode,
-        itemId: itemId,
-        goodQty: goodQty,
-        damagedQty: damagedQty,
-        targetRack: targetRack,
-        damageNote: damageNote,
-      );
+  }) => _repository.submitPutaway(
+    _tenantSlug,
+    manifestCode: manifestCode,
+    itemId: itemId,
+    goodQty: goodQty,
+    damagedQty: damagedQty,
+    targetRack: targetRack,
+    damageNote: damageNote,
+  );
 
   Future<void> commitManifestApi(String manifestCode) async {
     await _repository.commitManifest(_tenantSlug, manifestCode);
@@ -370,11 +376,7 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
   }
 
   Future<void> holdManifest(String manifestCode, {String? reason}) async {
-    await _repository.holdManifest(
-      _tenantSlug,
-      manifestCode,
-      reason: reason,
-    );
+    await _repository.holdManifest(_tenantSlug, manifestCode, reason: reason);
     await loadManifests();
   }
 
@@ -386,11 +388,12 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
 
 final inboundRepositoryProvider =
     StateNotifierProvider<InboundNotifier, List<InboundManifest>>((ref) {
-  final repository = ref.watch(inboundDataSourceProvider);
-  final authState = ref.watch(authProvider);
-  final slug = authState.tenantSlug ?? authState.tenantName ?? 'demo-tenant';
-  return InboundNotifier(repository, slug);
-});
+      final repository = ref.watch(inboundDataSourceProvider);
+      final authState = ref.watch(authProvider);
+      final slug =
+          authState.tenantSlug ?? authState.tenantName ?? 'demo-tenant';
+      return InboundNotifier(repository, slug);
+    });
 
 final inboundStatsProvider = Provider<InboundStats>((ref) {
   ref.watch(inboundRepositoryProvider);

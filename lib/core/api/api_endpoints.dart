@@ -36,10 +36,13 @@ class ApiEndpoints {
   static String outboundResume(String slug) => '/$slug/outbound/resume';
 
   // STOCK TRANSFER (MUTASI RAK / GUDANG)
-  static String transferList(String slug) =>
-      '/$slug/transactions/stock-transfer';
-  static String transferCreate(String slug) =>
-      '/$slug/transactions/stock-transfer';
+  static String transferList(String slug) => '/$slug/stock-transfer/';
+  static String transferCreate(String slug) => '/$slug/stock-transfer/store';
+  static String transferOptions(String slug) => '/$slug/stock-transfer/options';
+  static String transferUpdate(String slug, String code) =>
+      '/$slug/stock-transfer/$code';
+  static String transferCancel(String slug, String code) =>
+      '/$slug/stock-transfer/$code/cancel';
 
   // STOCK OPNAME (AUDIT FISIK)
   static String opnameActiveSession(String slug) =>

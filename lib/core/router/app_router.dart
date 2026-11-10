@@ -21,9 +21,10 @@ import '../../features/scanner/generic_scanner_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/stock_opname/opname_list_screen.dart';
 import '../../features/stock_opname/opname_scanner_screen.dart';
-import '../../features/stock_transfer/transfer_form_screen.dart';
-import '../../features/stock_transfer/transfer_list_screen.dart';
 import '../../features/stock_transfer/transfer_scanner_screen.dart';
+import '../../features/stock_transfer/transfer_transaction_form_screen.dart';
+import '../../features/stock_transfer/transfer_transactions_screen.dart';
+import '../../features/stock_transfer/transfer_transaction_model.dart';
 import '../../features/sync/sync_screen.dart';
 import '../../shared/widgets/omni_bottom_nav.dart';
 
@@ -177,11 +178,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/more/transfer',
-                builder: (context, state) => const TransferListScreen(),
+                builder: (context, state) => const TransferTransactionsScreen(),
                 routes: [
                   GoRoute(
                     path: 'form',
-                    builder: (context, state) => const TransferFormScreen(),
+                    builder: (context, state) => TransferTransactionFormScreen(
+                      transaction: state.extra as TransferTransaction?,
+                    ),
                   ),
                   GoRoute(
                     path: 'scan',

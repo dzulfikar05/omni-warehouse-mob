@@ -708,48 +708,83 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
 
   Widget _buildItemsCard(List<OutboundItem> items, OutboundOrder order) =>
       _card(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Detail Item Picking & Source Rack',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    'Semua (${items.length})',
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            if (items.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(18),
+    padding: EdgeInsets.zero,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+          child: Row(
+            children: [
+              const Expanded(
                 child: Text(
-                  'Manifes ini belum memiliki item.',
-                  style: TextStyle(color: AppColors.textMuted),
+                  'Detail Item Picking & Source Rack',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              )
-            else
-              ...items.map((item) => _buildItemRow(item, order)),
-          ],
+              ),
+              Text(
+                'Semua (${items.length})',
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
         ),
-      );
+        const Divider(height: 1),
+        if (_detail!.locations.any(
+          (location) => location.stockQuantity != null,
+        ))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Stok per rak',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _detail!.locations
+                      .where((location) => location.stockQuantity != null)
+                      .map(
+                        (location) => Chip(
+                          label: Text(
+                            '${location.rackCode} · ${location.stockQuantity} unit',
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+        if (items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(18),
+            child: Text(
+              'Manifes ini belum memiliki item.',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          )
+        else
+          ...items.map((item) => _buildItemRow(item, order)),
+      ],
+    ),
+  );
 
   Widget _buildItemRow(OutboundItem item, OutboundOrder order) {
     final selected = _selectedItem?.id == item.id;
@@ -831,6 +866,7 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
         order.status != OutboundStatus.dispatched &&
         order.status != OutboundStatus.hold;
     final locations = _detail!.locations;
+    final rackStock = _rackById(_selectedSourceRackId)?.stockQuantity;
     final rackValue =
         locations.any((location) => location.id == _selectedSourceRackId)
         ? _selectedSourceRackId
@@ -899,7 +935,13 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                 .map(
                   (location) => DropdownMenuItem(
                     value: location.id,
-                    child: Text(location.rackCode),
+                    child: Text(
+                      location.stockQuantity == null
+                          ? location.rackCode
+                          : '${location.rackCode} · Stok ${location.stockQuantity}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 )
                 .toList(),
@@ -911,6 +953,17 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
               isDense: true,
             ),
           ),
+          if (rackStock != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 5, left: 3),
+              child: Text(
+                'Stok saat ini di rak: $rackStock unit',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
           if (locations.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 5),

@@ -95,6 +95,8 @@ class OutboundProductMaster {
     required this.barcode,
     required this.name,
     this.productId = 0,
+    this.availableStock,
+    this.unit = 'Pcs',
   });
 
   final int skuId;
@@ -102,6 +104,8 @@ class OutboundProductMaster {
   final String sku;
   final String barcode;
   final String name;
+  final int? availableStock;
+  final String unit;
 
   factory OutboundProductMaster.fromJson(Map<String, dynamic> json) {
     final product = json['product'] is Map
@@ -114,22 +118,45 @@ class OutboundProductMaster {
       barcode: (json['barcode'] ?? product['barcode'] ?? '').toString(),
       name: (json['name'] ?? json['product_name'] ?? product['name'] ?? '')
           .toString(),
+      availableStock: _asNullableInt(
+        json['available_stock'] ??
+            json['available_quantity'] ??
+            json['stock_qty'] ??
+            json['quantity'],
+      ),
+      unit: (json['unit'] ?? json['unit_name'] ?? 'Pcs').toString(),
     );
   }
 }
 
 class OutboundLocation {
-  const OutboundLocation({required this.id, required this.rackCode, this.zone});
+  const OutboundLocation({
+    required this.id,
+    required this.rackCode,
+    this.zone,
+    this.stockQuantity,
+  });
 
   final int id;
   final String rackCode;
   final String? zone;
+  final int? stockQuantity;
 
   factory OutboundLocation.fromJson(Map<String, dynamic> json) =>
       OutboundLocation(
         id: _asInt(json['id']),
         rackCode: (json['rack_code'] ?? json['code'] ?? '').toString(),
         zone: json['zone']?.toString(),
+        stockQuantity: _asNullableInt(
+          json['stock_quantity'] ??
+              json['stock_qty'] ??
+              json['current_qty'] ??
+              json['stock'] ??
+              json['available_quantity'] ??
+              json['available_stock'] ??
+              json['quantity'] ??
+              json['qty'],
+        ),
       );
 }
 
@@ -457,3 +484,6 @@ class OutboundStats {
 }
 
 int _asInt(dynamic value) => int.tryParse(value?.toString() ?? '') ?? 0;
+
+int? _asNullableInt(dynamic value) =>
+    value == null ? null : int.tryParse(value.toString());

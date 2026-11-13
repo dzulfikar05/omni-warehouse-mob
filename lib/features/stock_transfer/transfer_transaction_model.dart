@@ -29,27 +29,39 @@ class TransferLocation {
     required this.name,
     this.warehouseId,
     this.warehouseName,
+    this.stockQuantity,
   });
 
   final int id;
   final String name;
   final int? warehouseId;
   final String? warehouseName;
+  final int? stockQuantity;
 
   factory TransferLocation.fromJson(Map<String, dynamic> json) {
     final warehouse = _asMap(json['warehouse']);
     return TransferLocation(
       id: _asInt(json['id']),
       name: (json['rack_code'] ??
-              json['location_code'] ??
-              json['name'] ??
-              json['code'] ??
-              '')
-          .toString(),
+                  json['location_code'] ??
+                  json['name'] ??
+                  json['code'] ??
+                  '')
+              .toString(),
       warehouseId: _asNullableInt(
         json['warehouse_id'] ?? warehouse?['id'],
       ),
       warehouseName: (json['warehouse_name'] ?? warehouse?['name'])?.toString(),
+      stockQuantity: _asNullableInt(
+        json['stock_quantity'] ??
+            json['stock_qty'] ??
+            json['current_qty'] ??
+            json['stock'] ??
+            json['available_quantity'] ??
+            json['available_stock'] ??
+            json['quantity'] ??
+            json['qty'],
+      ),
     );
   }
 }
@@ -128,34 +140,34 @@ class TransferTransactionLine {
     return TransferTransactionLine(
       skuId: _asInt(json['sku_id'] ?? skuObject['id']),
       sku: (json['sku_code'] ??
-              json['sku_name'] ??
-              (json['sku'] is String ? json['sku'] : null) ??
-              skuObject['sku'] ??
-              product['sku'] ??
-              '')
-          .toString(),
+                  json['sku_name'] ??
+                  (json['sku'] is String ? json['sku'] : null) ??
+                  skuObject['sku'] ??
+                  product['sku'] ??
+                  '')
+              .toString(),
       productName: (json['product_name'] ??
-              json['name'] ??
-              skuObject['name'] ??
-              product['name'] ??
-              'Produk')
-          .toString(),
+                  json['name'] ??
+                  skuObject['name'] ??
+                  product['name'] ??
+                  'Produk')
+              .toString(),
       fromLocation: (json['from_location_name'] ??
-              json['source_location_name'] ??
-              from?['rack_code'] ??
-              from?['name'] ??
-              (json['from_location'] is String
-                  ? json['from_location']
-                  : null) ??
-              '')
-          .toString(),
+                  json['source_location_name'] ??
+                  from?['rack_code'] ??
+                  from?['name'] ??
+                  (json['from_location'] is String
+                      ? json['from_location']
+                      : null) ??
+                  '')
+              .toString(),
       toLocation: (json['to_location_name'] ??
-              json['destination_location_name'] ??
-              to?['rack_code'] ??
-              to?['name'] ??
+                  json['destination_location_name'] ??
+                  to?['rack_code'] ??
+                  to?['name'] ??
               (json['to_location'] is String ? json['to_location'] : null) ??
-              '')
-          .toString(),
+                  '')
+              .toString(),
       quantity: _asInt(json['quantity'] ?? json['qty']),
       fromLocationId: _asNullableInt(
         json['from_location_id'] ?? from?['id'],
@@ -201,30 +213,30 @@ class TransferTransaction {
     final rawItems = json['items'] ?? json['details'] ?? json['lines'];
     final items = rawItems is List
         ? rawItems
-            .whereType<Map>()
-            .map(
-              (item) => TransferTransactionLine.fromJson(
-                Map<String, dynamic>.from(item),
-              ),
-            )
-            .toList()
+              .whereType<Map>()
+              .map(
+                (item) => TransferTransactionLine.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList()
         : <TransferTransactionLine>[];
     final user = _asMap(json['creator'] ?? json['user']);
     return TransferTransaction(
       code: (json['transfer_code'] ??
-              json['reference_number'] ??
-              json['code'] ??
-              json['transaction_code'] ??
-              '')
-          .toString(),
+                  json['reference_number'] ??
+                  json['code'] ??
+                  json['transaction_code'] ??
+                  '')
+              .toString(),
       status: (json['status'] ?? 'pending').toString(),
       createdAt: (json['created_at'] ?? json['createdAt'] ?? '').toString(),
       items: items,
       creator: (json['created_by_name'] ??
-              json['operator_name'] ??
-              user?['name'] ??
-              '')
-          .toString(),
+                  json['operator_name'] ??
+                  user?['name'] ??
+                  '')
+              .toString(),
       notes: json['notes']?.toString(),
       itemCount: _asNullableInt(
         json['total_items'] ?? json['item_count'] ?? json['total_skus'],

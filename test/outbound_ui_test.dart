@@ -35,6 +35,7 @@ void main() {
     expect(find.text('Pilih Customer / Pelanggan'), findsOneWidget);
     expect(find.text('No. Kendaraan (Opsional)'), findsOneWidget);
     expect(find.text('Nama Driver (Opsional)'), findsOneWidget);
+    expect(find.textContaining('Barcode: 0034'), findsOneWidget);
   });
 
   testWidgets('outbound list opens SO manifest form with customer and SKU', (
@@ -82,6 +83,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Detail Item Picking & Source Rack'), findsOneWidget);
     expect(find.textContaining('SKU-34'), findsOneWidget);
+    expect(find.text('RACK-B2-01 · 15 unit'), findsOneWidget);
   });
 }
 
@@ -170,7 +172,12 @@ class _FakeOutboundRepository implements OutboundRepository {
       ),
     ],
     locations: const [
-      OutboundLocation(id: 5, rackCode: 'RACK-B2-01', zone: 'B2'),
+      OutboundLocation(
+        id: 5,
+        rackCode: 'RACK-B2-01',
+        zone: 'B2',
+        stockQuantity: 15,
+      ),
     ],
   );
 

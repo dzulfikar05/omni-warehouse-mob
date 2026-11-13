@@ -116,7 +116,12 @@ void main() {
                 },
               ],
               'locations': [
-                {'id': 5, 'rack_code': 'RACK-B2-01', 'zone': 'B2'},
+                {
+                  'id': 5,
+                  'rack_code': 'RACK-B2-01',
+                  'zone': 'B2',
+                  'available_quantity': 15,
+                },
               ],
             },
           }, onRequest: (value) => request = value),
@@ -135,6 +140,7 @@ void main() {
         expect(result.manifest.totalPickedUnits, 1);
         expect(result.manifest.totalProcessedUnits, 3);
         expect(result.locations.single.zone, 'B2');
+        expect(result.locations.single.stockQuantity, 15);
       },
     );
 

@@ -19,8 +19,8 @@ import '../../features/profile/edit_profile_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/scanner/generic_scanner_screen.dart';
 import '../../features/splash/splash_screen.dart';
-import '../../features/stock_opname/opname_list_screen.dart';
-import '../../features/stock_opname/opname_scanner_screen.dart';
+import '../../features/stock_opname/stock_opname_screen.dart';
+import '../../features/stock_opname/stock_opname_scanner_screen.dart';
 import '../../features/stock_transfer/transfer_scanner_screen.dart';
 import '../../features/stock_transfer/transfer_transaction_form_screen.dart';
 import '../../features/stock_transfer/transfer_transactions_screen.dart';
@@ -194,11 +194,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
               GoRoute(
                 path: '/more/opname',
-                builder: (context, state) => const OpnameListScreen(),
+                builder: (context, state) => const StockOpnameScreen(),
                 routes: [
                   GoRoute(
                     path: ':session_code',
-                    builder: (context, state) => OpnameScannerScreen(
+                    builder: (context, state) => StockOpnameScannerScreen(
                       sessionCode: state.pathParameters['session_code']!,
                     ),
                   ),

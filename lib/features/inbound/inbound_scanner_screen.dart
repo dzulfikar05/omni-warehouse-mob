@@ -107,8 +107,8 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
       _damageNoteController.text = item.notes ?? '';
       _selectedRack =
           item.targetRack != null && _availableRacks.contains(item.targetRack)
-              ? item.targetRack
-              : (_availableRacks.isEmpty ? null : _availableRacks.first);
+          ? item.targetRack
+          : (_availableRacks.isEmpty ? null : _availableRacks.first);
     });
   }
 
@@ -545,8 +545,8 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
               ElevatedButton.icon(
                 onPressed:
                     !canEdit || isHeld || _isCommitting || _isUpdatingStatus
-                        ? null
-                        : () => _commitInbound(manifest),
+                    ? null
+                    : () => _commitInbound(manifest),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(48, 50),
                   padding: const EdgeInsets.symmetric(
@@ -610,8 +610,8 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
                       tooltip: 'Buka Kamera Scanner',
                       onPressed:
                           canScan && !_isScanning && !_isCameraScannerOpen
-                              ? _openCameraScanner
-                              : null,
+                          ? _openCameraScanner
+                          : null,
                     ),
                     isDense: true,
                     border: OutlineInputBorder(
@@ -713,6 +713,41 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
             ),
           ),
           const Divider(height: 1),
+          if (_detail!.locations.any(
+            (location) => location.stockQuantity != null,
+          ))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Stok per rak',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _detail!.locations
+                        .where((location) => location.stockQuantity != null)
+                        .map(
+                          (location) => Chip(
+                            label: Text(
+                              '${location.rackCode} · ${location.stockQuantity} unit',
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
           if (items.isEmpty)
             const Padding(
               padding: EdgeInsets.all(18),
@@ -808,6 +843,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
 
   Widget _buildPutawayCard() {
     final item = _selectedItem!;
+    final rackStock = _locationByRack(_selectedRack)?.stockQuantity;
     final canEdit = _detail!.manifest.status != InboundStatus.closed &&
         _detail!.manifest.status != InboundStatus.hold;
     return _card(
@@ -875,10 +911,17 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
             hint: const Text('Pilih lokasi rak'),
             items: _availableRacks
                 .map(
-                  (rack) => DropdownMenuItem(
-                    value: rack,
-                    child: Text(rack),
-                  ),
+                  (rack) {
+                    final stock = _locationByRack(rack)?.stockQuantity;
+                    return DropdownMenuItem(
+                      value: rack,
+                      child: Text(
+                        stock == null ? rack : '$rack · Stok $stock',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  },
                 )
                 .toList(),
             onChanged:
@@ -888,6 +931,17 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
               isDense: true,
             ),
           ),
+          if (rackStock != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 5, left: 3),
+              child: Text(
+                'Stok saat ini di rak: $rackStock unit',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
           const SizedBox(height: 10),
           TextField(
             controller: _damageNoteController,
@@ -931,6 +985,13 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
     );
   }
 
+  InboundLocation? _locationByRack(String? rackCode) {
+    if (rackCode == null) return null;
+    return _detail?.locations
+        .where((location) => location.rackCode == rackCode)
+        .firstOrNull;
+  }
+
   Widget _quantityField({
     required String label,
     required TextEditingController controller,
@@ -949,46 +1010,46 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
       );
 
   Widget _statusBadge(InboundStatus status) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(
-          color: status.bg,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          status.label,
-          style: TextStyle(
-            color: status.color,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(
+      color: status.bg,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      status.label,
+      style: TextStyle(
+        color: status.color,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 
   Widget _tag(String label, Color background, Color foreground) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: foreground,
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+    decoration: BoxDecoration(
+      color: background,
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        color: foreground,
+        fontSize: 9,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 
   Widget _card({required Widget child, EdgeInsets? padding}) => Container(
-        padding: padding ?? const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: child,
-      );
+    padding: padding ?? const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: child,
+  );
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

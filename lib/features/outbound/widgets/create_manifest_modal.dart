@@ -427,6 +427,8 @@ class _CreateOutboundManifestModalState
                                   decoration: _decoration(hint: 'Pilih SKU'),
                                 ),
                                 const SizedBox(height: 8),
+                                _buildProductDetails(item.product),
+                                const SizedBox(height: 8),
                                 const _FieldLabel('Jumlah SO'),
                                 Row(
                                   children: [
@@ -518,6 +520,39 @@ class _CreateOutboundManifestModalState
         ],
       ),
     ],
+  );
+
+  Widget _buildProductDetails(OutboundProductMaster product) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(9),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceAlt,
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          product.name,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          'SKU: ${product.sku} · Barcode: ${product.barcode.isEmpty ? '-' : product.barcode}',
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+        Text(
+          product.availableStock == null
+              ? 'Satuan: ${product.unit} · Stok rak tersedia pada detail picking'
+              : 'Stok tersedia: ${product.availableStock} ${product.unit}',
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+      ],
+    ),
   );
 
   InputDecoration _decoration({String? hint}) => InputDecoration(

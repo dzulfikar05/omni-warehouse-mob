@@ -91,6 +91,8 @@ class InboundProductMaster {
   final String sku;
   final String barcode;
   final String name;
+  final String unit;
+  final int? availableStock;
 
   InboundProductMaster({
     required this.id,
@@ -98,6 +100,8 @@ class InboundProductMaster {
     required this.sku,
     required this.barcode,
     required this.name,
+    this.unit = 'pcs',
+    this.availableStock,
   });
 
   factory InboundProductMaster.fromJson(Map<String, dynamic> json) {
@@ -107,6 +111,13 @@ class InboundProductMaster {
       sku: json['sku']?.toString() ?? '',
       barcode: json['barcode']?.toString() ?? json['sku']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
+      unit: (json['unit'] ?? json['unit_name'] ?? 'pcs').toString(),
+      availableStock: _asNullableInt(
+        json['available_stock'] ??
+            json['available_quantity'] ??
+            json['stock_qty'] ??
+            json['quantity'],
+      ),
     );
   }
 }
@@ -293,19 +304,38 @@ class InboundStats {
 }
 
 class InboundLocation {
-  const InboundLocation({required this.id, required this.rackCode, this.zone});
+  const InboundLocation({
+    required this.id,
+    required this.rackCode,
+    this.zone,
+    this.stockQuantity,
+  });
 
   final int id;
   final String rackCode;
   final String? zone;
+  final int? stockQuantity;
 
   factory InboundLocation.fromJson(Map<String, dynamic> json) =>
       InboundLocation(
         id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
         rackCode: json['rack_code']?.toString() ?? '',
         zone: json['zone']?.toString(),
+        stockQuantity: _asNullableInt(
+          json['stock_quantity'] ??
+              json['stock_qty'] ??
+              json['current_qty'] ??
+              json['stock'] ??
+              json['available_quantity'] ??
+              json['available_stock'] ??
+              json['quantity'] ??
+              json['qty'],
+        ),
       );
 }
+
+int? _asNullableInt(dynamic value) =>
+    value == null ? null : int.tryParse(value.toString());
 
 class InboundManifestDetail {
   const InboundManifestDetail({

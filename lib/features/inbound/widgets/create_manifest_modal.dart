@@ -425,6 +425,8 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                               ),
                                             ),
                                             const SizedBox(height: 8),
+                                            _buildProductDetails(item.product),
+                                            const SizedBox(height: 8),
                                             Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
@@ -544,6 +546,38 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
       ),
     );
   }
+
+  Widget _buildProductDetails(InboundProductMaster product) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(9),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceAlt,
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          product.name,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          'SKU: ${product.sku} · Barcode: ${product.barcode.isEmpty ? '-' : product.barcode}',
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+        Text(
+          'Satuan: ${product.unit}'
+          '${product.availableStock == null ? '' : ' · Stok saat ini: ${product.availableStock} ${product.unit}'}',
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+      ],
+    ),
+  );
 
   InputDecoration _inputDecoration({String? hint}) => InputDecoration(
     hintText: hint,

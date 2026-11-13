@@ -43,6 +43,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Detail Item Receiving & Putaway'), findsOneWidget);
     expect(find.textContaining('Long-name monitor'), findsOneWidget);
+    expect(find.text('RACK-A1-01 · 12 unit'), findsOneWidget);
   });
 
   testWidgets('create manifest modal remains scrollable above the keyboard', (
@@ -70,6 +71,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Buat Manifes Inbound PO'), findsOneWidget);
     expect(find.text('Buat Manifes PO'), findsOneWidget);
+    expect(find.textContaining('Barcode: 0123456789'), findsOneWidget);
   });
 }
 
@@ -144,7 +146,12 @@ class _FakeInboundRepository implements InboundRepository {
       ),
     ],
     locations: const [
-      InboundLocation(id: 1, rackCode: 'RACK-A1-01', zone: 'A1'),
+      InboundLocation(
+        id: 1,
+        rackCode: 'RACK-A1-01',
+        zone: 'A1',
+        stockQuantity: 12,
+      ),
     ],
   );
 

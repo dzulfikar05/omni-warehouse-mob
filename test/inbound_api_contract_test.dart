@@ -153,7 +153,12 @@ void main() {
                 },
               ],
               'available_locations': [
-                {'id': 7, 'rack_code': 'RACK-A1-01', 'zone': 'A1'},
+                {
+                  'id': 7,
+                  'rack_code': 'RACK-A1-01',
+                  'zone': 'A1',
+                  'stock_qty': 12,
+                },
               ],
             },
           }),
@@ -173,6 +178,7 @@ void main() {
         expect(item.goodQty, 2);
         expect(item.damagedQty, 1);
         expect(result.locations.single.rackCode, 'RACK-A1-01');
+        expect(result.locations.single.stockQuantity, 12);
       },
     );
 

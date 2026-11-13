@@ -24,6 +24,7 @@ void main() {
                           'rack_code': 'RACK-A1',
                           'warehouse_id': 2,
                           'warehouse_name': 'Gudang Utama',
+                          'quantity': 12,
                         },
                       ],
                       'skus': [
@@ -71,10 +72,7 @@ void main() {
                     },
                   };
             handler.resolve(
-              Response<dynamic>(
-                requestOptions: options,
-                data: body,
-              ),
+              Response<dynamic>(requestOptions: options, data: body),
             );
           },
         ),
@@ -92,6 +90,7 @@ void main() {
       expect(requests[1].queryParameters['status'], 'completed');
       expect(options.warehouses.single.name, 'Gudang Utama');
       expect(options.locations.single.id, 8);
+      expect(options.locations.single.stockQuantity, 12);
       expect(options.skus.single.availableStock, 20);
       expect(result.transactions.single.code, 'TRF-1001');
       expect(result.transactions.single.items.single.fromLocation, 'RACK-A1');

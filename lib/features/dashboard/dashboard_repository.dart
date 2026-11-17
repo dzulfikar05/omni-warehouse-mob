@@ -32,11 +32,10 @@ class DashboardState {
 abstract class DashboardRepository {
   DashboardSummary getInitialSummary();
   Future<DashboardSummary> getSummary();
-  Future<void> syncOfflineQueue();
 }
 
 class MockDashboardRepository implements DashboardRepository {
-  DashboardSummary _summary = const DashboardSummary(
+  final DashboardSummary _summary = const DashboardSummary(
     kpi: DashboardKpi(
       activeInboundCount: 4,
       activeOutboundCount: 2,
@@ -107,15 +106,6 @@ class MockDashboardRepository implements DashboardRepository {
     await Future.delayed(const Duration(milliseconds: 300));
     return _summary;
   }
-
-  @override
-  Future<void> syncOfflineQueue() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    _summary = _summary.copyWith(
-      pendingSyncCount: 0,
-      kpi: _summary.kpi.copyWith(offlineQueueCount: 0),
-    );
-  }
 }
 
 class ApiDashboardRepository implements DashboardRepository {
@@ -129,19 +119,13 @@ class ApiDashboardRepository implements DashboardRepository {
 
   @override
   Future<DashboardSummary> getSummary() async {
-final response = await _dio.get(ApiEndpoints.dashboardSummary(tenantSlug));
+    final response = await _dio.get(ApiEndpoints.dashboardSummary(tenantSlug));
     final data = response.data;
     final itemMap = (data is Map && data['data'] is Map)
         ? data['data'] as Map
         : (data is Map ? data : null);
     if (itemMap == null) return const DashboardSummary();
     return DashboardSummary.fromJson(Map<String, dynamic>.from(itemMap));
-  }
-
-  @override
-  Future<void> syncOfflineQueue() async {
-    // Dipanggil saat fitur sinkronisasi Isar offline aktif
-    await Future.delayed(const Duration(milliseconds: 600));
   }
 }
 
@@ -177,15 +161,6 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
         errorMessage: 'Gagal memuat data dari server: ${e.toString()}',
       );
     }
-  }
-
-  Future<void> syncOfflineQueue() async {
-    await _repository.syncOfflineQueue();
-    final updatedSummary = state.summary.copyWith(
-      pendingSyncCount: 0,
-      kpi: state.summary.kpi.copyWith(offlineQueueCount: 0),
-    );
-    state = state.copyWith(summary: updatedSummary);
   }
 }
 

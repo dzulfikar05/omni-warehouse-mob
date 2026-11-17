@@ -22,6 +22,8 @@ class ApiEndpoints {
   static String inboundHold(String slug) => '/$slug/inbound/hold';
   static String inboundResume(String slug) => '/$slug/inbound/resume';
   static String inboundOptions(String slug) => '/$slug/inbound/options';
+  static String inboundSyncOffline(String slug) =>
+      '/$slug/inbound/sync-offline';
   // OUTBOUND (PENGIRIMAN BARANG)
   static String outboundList(String slug) => '/$slug/outbound/';
   static String outboundDetail(String slug, String code) =>

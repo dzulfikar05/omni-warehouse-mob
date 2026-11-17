@@ -18,11 +18,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (token != null && token.isNotEmpty) {
       final tenantSlug = await storage.getTenantSlug();
       final tenantName = await storage.getTenantName();
+      final userId = await storage.getUserId();
       final userName = await storage.getUserName();
       final userRole = await storage.getUserRole();
 
       state = AuthState(
         token: token,
+        userId: userId,
         tenantSlug: tenantSlug,
         tenantName: tenantName,
         userName: userName,
@@ -39,6 +41,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Panggil pada Step 2: Simpan seluruh sesi login ke Memori dan SecureStorage
   Future<void> saveSession({
     required String token,
+    int? userId,
     required String tenantSlug,
     required String tenantName,
     required String userName,
@@ -46,6 +49,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = AuthState(
       token: token,
+      userId: userId,
       tenantSlug: tenantSlug,
       tenantName: tenantName,
       userName: userName,
@@ -54,6 +58,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     await SecureStorage.instance.saveSession(
       token: token,
+      userId: userId,
       tenantSlug: tenantSlug,
       tenantName: tenantName,
       userName: userName,

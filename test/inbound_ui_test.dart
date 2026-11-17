@@ -2,19 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_warehouse_mob/core/auth/auth_provider.dart';
+import 'package:omni_warehouse_mob/core/offline/offline_db.dart';
 import 'package:omni_warehouse_mob/core/theme/app_theme.dart';
 import 'package:omni_warehouse_mob/features/inbound/inbound_list_screen.dart';
 import 'package:omni_warehouse_mob/features/inbound/inbound_model.dart';
 import 'package:omni_warehouse_mob/features/inbound/inbound_repository.dart';
 import 'package:omni_warehouse_mob/features/inbound/inbound_scanner_screen.dart';
 import 'package:omni_warehouse_mob/features/inbound/widgets/create_manifest_modal.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  setUpAll(() async {
+    sqfliteFfiInit();
+    await OfflineDb.init(
+      factory: databaseFactoryFfi,
+      databasePath: inMemoryDatabasePath,
+      initializeHive: false,
+    );
+  });
+
   testWidgets('inbound list fits a narrow mobile viewport', (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 640));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(_app(const InboundListScreen()));
+    await _flushOfflineIo(tester);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -33,6 +45,7 @@ void main() {
         const InboundScannerScreen(code: 'TX-INB-2026-VERY-LONG-MANIFEST-CODE'),
       ),
     );
+    await _flushOfflineIo(tester);
     await tester.pumpAndSettle();
     expect(find.text('Verifikasi Barcode / SKU'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
@@ -66,6 +79,7 @@ void main() {
         ),
       ),
     );
+    await _flushOfflineIo(tester);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -75,16 +89,22 @@ void main() {
   });
 }
 
+Future<void> _flushOfflineIo(WidgetTester tester) async {
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 100)),
+  );
+}
+
 Widget _app(Widget home) => ProviderScope(
-  overrides: [
-    inboundDataSourceProvider.overrideWithValue(_repository),
-    inboundRepositoryProvider.overrideWith(
-      (ref) => InboundNotifier(_repository, 'tenant-a'),
-    ),
-    authProvider.overrideWith((ref) => _TestAuthNotifier()),
-  ],
-  child: MaterialApp(theme: buildAppTheme(), home: home),
-);
+      overrides: [
+        inboundDataSourceProvider.overrideWithValue(_repository),
+        inboundRepositoryProvider.overrideWith(
+          (ref) => InboundNotifier(_repository, 'tenant-a', 'test-user'),
+        ),
+        authProvider.overrideWith((ref) => _TestAuthNotifier()),
+      ],
+      child: MaterialApp(theme: buildAppTheme(), home: home),
+    );
 
 const _repository = _FakeInboundRepository();
 
@@ -100,64 +120,65 @@ class _FakeInboundRepository implements InboundRepository {
   Future<InboundMasterOptions> getMasterOptions(
     String slug,
   ) async => InboundMasterOptions(
-    suppliers: [InboundSupplier(id: 1, code: '1', name: 'Supplier WMS')],
-    products: [
-      InboundProductMaster(
-        id: 9,
-        productId: 3,
-        sku: 'SKU-MONITOR-ULTRA-WIDE',
-        barcode: '0123456789',
-        name:
-            'Long-name monitor with an extra-wide professional display and accessory bundle',
-      ),
-    ],
-    availableRacks: const ['RACK-A1-01'],
-  );
+        suppliers: [InboundSupplier(id: 1, code: '1', name: 'Supplier WMS')],
+        products: [
+          InboundProductMaster(
+            id: 9,
+            productId: 3,
+            sku: 'SKU-MONITOR-ULTRA-WIDE',
+            barcode: '0123456789',
+            name:
+                'Long-name monitor with an extra-wide professional display and accessory bundle',
+          ),
+        ],
+        availableRacks: const ['RACK-A1-01'],
+      );
 
   @override
   Future<InboundListResult> getManifests(
     String slug, {
     Map<String, dynamic> filters = const {},
   }) async => InboundListResult(
-    manifests: [_manifest],
-    stats: const InboundStats(
-      todayTotal: 1,
-      inProgress: 0,
-      completed: 0,
-      hold: 1,
-    ),
-  );
+        manifests: [_manifest],
+        stats: const InboundStats(
+          todayTotal: 1,
+          inProgress: 0,
+          completed: 0,
+          hold: 1,
+        ),
+      );
 
   @override
   Future<InboundManifestDetail> getManifestDetail(
     String slug,
     String code,
   ) async => InboundManifestDetail(
-    manifest: _manifest,
-    items: [
-      InboundItem(
-        id: '42',
-        productId: 9,
-        sku: 'SKU-MONITOR-ULTRA-WIDE',
-        barcode: '0123456789',
-        name:
-            'Long-name monitor with an extra-wide professional display and accessory bundle',
-        expectedQty: 10,
-      ),
-    ],
-    locations: const [
-      InboundLocation(
-        id: 1,
-        rackCode: 'RACK-A1-01',
-        zone: 'A1',
-        stockQuantity: 12,
-      ),
-    ],
-  );
+        manifest: _manifest,
+        items: [
+          InboundItem(
+            id: '42',
+            productId: 9,
+            sku: 'SKU-MONITOR-ULTRA-WIDE',
+            barcode: '0123456789',
+            name:
+                'Long-name monitor with an extra-wide professional display and accessory bundle',
+            expectedQty: 10,
+          ),
+        ],
+        locations: const [
+          InboundLocation(
+            id: 1,
+            rackCode: 'RACK-A1-01',
+            zone: 'A1',
+            stockQuantity: 12,
+          ),
+        ],
+      );
 
   @override
   Future<void> createManifest(
     String slug, {
+    required String localUuid,
     required int supplierId,
     required List<Map<String, int>> items,
   }) async {}

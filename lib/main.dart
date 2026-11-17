@@ -1,10 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
+import 'core/api/api_client.dart';
 import 'core/auth/auth_provider.dart';
 import 'core/config/app_config.dart';
 import 'core/offline/offline_db.dart';
+import 'core/offline/offline_identity.dart';
+import 'core/offline/sync_manager.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/inbound/inbound_repository.dart';
+import 'shared/utils/connectivity_checker.dart';
+import 'shared/widgets/omni_snackbar.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,9 +37,15 @@ class OmniWarehouseApp extends ConsumerStatefulWidget {
 }
 
 class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
+  StreamSubscription<bool>? _connectivitySubscription;
+  bool? _wasOnline;
+
   @override
   void initState() {
     super.initState();
+    _connectivitySubscription =
+        ConnectivityChecker.instance.onlineChanges.listen(_handleConnectivity);
+    ConnectivityChecker.instance.isOnline().then(_handleConnectivity);
     // Initialize auth state dari secure storage saat app start
     Future.microtask(() {
       ref.read(authProvider.notifier).initialize();
@@ -38,7 +53,76 @@ class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
   }
 
   @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
+  void _handleConnectivity(bool online) {
+    final wasOnline = _wasOnline;
+    _wasOnline = online;
+    if (online && wasOnline != true) _syncInboundQueue();
+  }
+
+  Future<void> _syncInboundQueue() async {
+    final auth = ref.read(authProvider);
+    if (!auth.isAuthenticated || auth.tenantSlug == null) return;
+
+    final tenantSlug = auth.tenantSlug!;
+    final ownerKey = offlineOwnerKey(
+      userId: auth.userId,
+      token: auth.token!,
+    );
+    try {
+      final pendingCount = await OfflineDb.countInboundQueue(
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      );
+      if (pendingCount == 0) return;
+
+      final result = await SyncManager.instance.syncInboundQueue(
+        dio: ref.read(dioProvider),
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+        authToken: auth.token!,
+      );
+      await ref.read(inboundRepositoryProvider.notifier).loadManifests();
+      if (mounted && result.failures.isNotEmpty) {
+        OmniSnackbar.show(
+          context,
+          message:
+              '${result.syncedCount} transaksi tersinkron; ${result.failures.length} perlu dicoba ulang.',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } on DioException catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: error.message ?? 'Sinkronisasi otomatis gagal.',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: 'Sinkronisasi otomatis gagal: $error',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    ref.listen(authProvider, (previous, next) {
+      if (next.isAuthenticated && previous?.isAuthenticated != true) {
+        ConnectivityChecker.instance.isOnline().then((online) {
+          if (online) _syncInboundQueue();
+        });
+      }
+    });
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(

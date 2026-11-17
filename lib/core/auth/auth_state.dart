@@ -2,6 +2,7 @@
 class AuthState {
   const AuthState({
     this.token,
+    this.userId,
     this.tenantSlug,
     this.tenantName,
     this.userName,
@@ -10,6 +11,7 @@ class AuthState {
   });
 
   final String? token;
+  final int? userId;
   final String? tenantSlug;
   final String? tenantName;
   final String? userName;
@@ -20,6 +22,7 @@ class AuthState {
 
   AuthState copyWith({
     String? token,
+    int? userId,
     String? tenantSlug,
     String? tenantName,
     String? userName,
@@ -28,6 +31,7 @@ class AuthState {
   }) {
     return AuthState(
       token: token ?? this.token,
+      userId: userId ?? this.userId,
       tenantSlug: tenantSlug ?? this.tenantSlug,
       tenantName: tenantName ?? this.tenantName,
       userName: userName ?? this.userName,

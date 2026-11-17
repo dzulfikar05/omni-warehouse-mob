@@ -67,6 +67,7 @@ void main() {
 
         await repository.createManifest(
           'tenant-a',
+          localUuid: 'offline-uuid-1',
           supplierId: 3,
           items: [
             {'product_id': 5, 'sku_id': 17, 'expected_qty': 10, 'po_qty': 10},
@@ -76,6 +77,7 @@ void main() {
         expect(capturedRequest?.method, 'POST');
         expect(capturedRequest?.path, '/tenant-a/inbound/store');
         expect(capturedRequest?.data, {
+          'local_uuid': 'offline-uuid-1',
           'supplier_id': 3,
           'items': [
             {'product_id': 5, 'sku_id': 17, 'expected_qty': 10, 'po_qty': 10},

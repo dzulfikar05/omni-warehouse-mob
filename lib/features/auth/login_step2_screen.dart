@@ -77,6 +77,7 @@ class _LoginStep2ScreenState extends ConsumerState<LoginStep2Screen> {
           .read(authProvider.notifier)
           .saveSession(
             token: session.token,
+            userId: session.userId,
             tenantSlug: session.tenantSlug,
             tenantName: session.tenantName,
             userName: session.userName,

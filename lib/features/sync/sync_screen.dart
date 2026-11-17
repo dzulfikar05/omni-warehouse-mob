@@ -4,6 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_client.dart';
+import '../../core/auth/auth_provider.dart';
+import '../../core/offline/offline_db.dart';
+import '../../core/offline/offline_identity.dart';
+import '../../core/offline/sync_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
@@ -47,84 +52,85 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
   bool _isSyncingAll = false;
   String? _syncingItemId;
 
-  late List<SyncItemModel> _queueItems;
+  List<SyncItemModel> _queueItems = [];
 
   @override
   void initState() {
     super.initState();
-    _queueItems = [
-      SyncItemModel(
-        id: '1',
-        title: 'Penerimaan PO-2026-1042',
-        subtitle: 'Inbound Logistik • 450 Unit',
-        statusLabel: 'Siap Kirim',
-        statusColor: const Color(0xFF131B2E),
-        statusBg: const Color(0xFFDAE2FD),
-        time: '10:35 WIB',
-        size: '14.2 KB',
-        uuid: 'UUID: 8f2a-e1',
-        icon: Icons.move_to_inbox_rounded,
-        payloadJson: {
-          'transaction_type': 'IN',
-          'manifest_code': 'PO-2026-1042',
-          'supplier': 'PT Distribusi Utama Elektronik',
-          'dock_bay': 'Dock Bay 04',
-          'total_units': 450,
-          'good_units': 448,
-          'damaged_units': 2,
-          'target_rack': 'RACK-A1-01',
-          'operator': 'Budi Santoso',
-          'created_at': '2026-10-16T10:35:12Z',
-        },
-      ),
-      SyncItemModel(
-        id: '2',
-        title: 'Wave Pick #W-104 (DO-8819)',
-        subtitle: 'Outbound Dispatch • 6 SKU',
-        statusLabel: 'Verifikasi Server',
-        statusColor: const Color(0xFF434655),
-        statusBg: const Color(0xFFD3E4FE),
-        time: '10:41 WIB',
-        size: '8.7 KB',
-        uuid: 'UUID: 3c9b-f4',
-        icon: Icons.outbox_rounded,
-        payloadJson: {
-          'transaction_type': 'OUT',
-          'order_code': 'DO-8819',
-          'wave_id': 'W-104',
-          'customer': 'Toko Maju Bersama',
-          'staging_bay': 'Staging S-01',
-          'picked_sku_count': 6,
-          'total_items': 120,
-          'created_at': '2026-10-16T10:41:40Z',
-        },
-      ),
-      SyncItemModel(
-        id: '3',
-        title: 'Blind Count Rak B-04',
-        subtitle: 'Stock Opname • 15 SKU Fisik',
-        statusLabel: 'Siap Sinkron',
-        statusColor: const Color(0xFF131B2E),
-        statusBg: const Color(0xFFDAE2FD),
-        time: '10:44 WIB',
-        size: '19.1 KB',
-        uuid: 'UUID: d901-aa',
-        icon: Icons.fact_check_outlined,
-        payloadJson: {
-          'transaction_type': 'OPNAME',
-          'session_code': 'OPN-2026-B04',
-          'rack': 'RACK-B1-04',
-          'scanned_skus': 15,
-          'matched': 14,
-          'variance': 1,
-          'variance_type': 'DEFICIT',
-          'created_at': '2026-10-16T10:44:22Z',
-        },
-      ),
-    ];
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadQueue());
   }
 
-  void _syncAll() async {
+  String get _tenantSlug {
+    final auth = ref.read(authProvider);
+    return auth.tenantSlug ?? auth.tenantName ?? 'demo-tenant';
+  }
+
+  String get _ownerKey {
+    final auth = ref.read(authProvider);
+    return offlineOwnerKey(
+      userId: auth.userId,
+      token: auth.token ?? 'unauthenticated',
+    );
+  }
+
+  Future<void> _loadQueue() async {
+    try {
+      final rows = await OfflineDb.getInboundQueue(
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+      );
+      if (!mounted) return;
+      setState(() {
+        _queueItems = rows.map((row) {
+          final payload = jsonDecode(row['payload_json'] as String);
+          final payloadMap = Map<String, dynamic>.from(payload as Map);
+          final metadata = jsonDecode(row['metadata_json'] as String);
+          final metadataMap = Map<String, dynamic>.from(metadata as Map);
+          final id = row['local_uuid'] as String;
+          final status = row['status'] as String;
+          final error = row['error_message']?.toString();
+          final items = payloadMap['items'] as List? ?? const [];
+          final totalUnits = items.fold<int>(
+            0,
+            (total, item) =>
+                total + (int.tryParse(item['po_qty'].toString()) ?? 0),
+          );
+          final createdAt = DateTime.parse(row['created_at'] as String);
+          final jsonSize = utf8.encode(jsonEncode(payloadMap)).length;
+          return SyncItemModel(
+            id: id,
+            title: 'Inbound $id',
+            subtitle:
+                '${metadataMap['supplier_name'] ?? 'Supplier'} • $totalUnits unit',
+            statusLabel: status == 'error'
+                ? 'Gagal: ${error ?? 'perlu diperiksa'}'
+                : 'Menunggu sync',
+            statusColor:
+                status == 'error' ? AppColors.danger : const Color(0xFF131B2E),
+            statusBg: status == 'error'
+                ? AppColors.dangerLight
+                : const Color(0xFFDAE2FD),
+            time: '${createdAt.toLocal().hour.toString().padLeft(2, '0')}:'
+                '${createdAt.toLocal().minute.toString().padLeft(2, '0')}',
+            size: '${(jsonSize / 1024).toStringAsFixed(1)} KB',
+            uuid: 'ID lokal: $id',
+            icon: Icons.move_to_inbox_rounded,
+            payloadJson: payloadMap,
+          );
+        }).toList();
+      });
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: 'Gagal membaca antrean offline: $error',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    }
+  }
+
+  Future<void> _syncAll() async {
     if (_queueItems.isEmpty) {
       OmniSnackbar.show(
         context,
@@ -135,56 +141,130 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
     }
 
     setState(() => _isSyncingAll = true);
-    await Future.delayed(const Duration(milliseconds: 1100));
-
-    if (mounted) {
-      final count = _queueItems.length;
-      setState(() {
-        _isSyncingAll = false;
-        _queueItems.clear();
-      });
-
+    try {
+      final result = await SyncManager.instance.syncInboundQueue(
+        dio: ref.read(dioProvider),
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+        authToken: ref.read(authProvider).token ?? '',
+      );
+      await _loadQueue();
+      if (!mounted) return;
       OmniSnackbar.show(
         context,
-        message: '$count Berkas transaksi berhasil disinkronkan ke Laravel!',
-        icon: Icons.cloud_done_rounded,
+        message: result.failures.isEmpty
+            ? '${result.syncedCount} transaksi inbound berhasil disinkronkan.'
+            : '${result.syncedCount} berhasil, ${result.failures.length} gagal. Periksa antrean.',
+        icon: result.failures.isEmpty
+            ? Icons.cloud_done_rounded
+            : Icons.error_outline_rounded,
       );
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: 'Sinkronisasi gagal: $error',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncingAll = false);
     }
   }
 
-  void _syncSingleItem(SyncItemModel item) async {
+  Future<void> _syncSingleItem(SyncItemModel item) async {
     setState(() => _syncingItemId = item.id);
-    await Future.delayed(const Duration(milliseconds: 700));
-
-    if (mounted) {
-      setState(() {
-        _syncingItemId = null;
-        _queueItems.removeWhere((q) => q.id == item.id);
-      });
-
+    try {
+      final result = await SyncManager.instance.syncInboundQueue(
+        dio: ref.read(dioProvider),
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+        authToken: ref.read(authProvider).token ?? '',
+        localUuid: item.id,
+      );
+      await _loadQueue();
+      if (!mounted) return;
       OmniSnackbar.show(
         context,
-        message: '${item.title} berhasil disinkronkan!',
-        icon: Icons.check_circle_rounded,
+        message: result.failures.isEmpty
+            ? '${item.title} berhasil disinkronkan.'
+            : result.failures.first.message,
+        icon: result.failures.isEmpty
+            ? Icons.check_circle_rounded
+            : Icons.error_outline_rounded,
       );
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: 'Sinkronisasi gagal: $error',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _syncingItemId = null);
     }
   }
 
-  void _removeItem(SyncItemModel item) {
-    setState(() {
-      _queueItems.removeWhere((q) => q.id == item.id);
-    });
-
-    OmniSnackbar.show(
-      context,
-      message: 'Antrean ${item.title} dihapus dari Isar lokal',
-      icon: Icons.delete_outline_rounded,
-      iconColor: AppColors.danger,
+  Future<void> _removeItem(SyncItemModel item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus antrean offline?'),
+        content: const Text(
+          'Transaksi ini akan dihapus permanen dari perangkat dan tidak akan dicoba sinkron lagi. Jika server sempat menerima transaksi, backend harus tetap mengenali local_uuid yang sama.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true) return;
+    try {
+      final deletedCount = await OfflineDb.deleteInboundQueueItem(
+        localUuid: item.id,
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+      );
+      if (deletedCount == 0) {
+        if (mounted) {
+          OmniSnackbar.show(
+            context,
+            message: 'Transaksi sedang disinkronkan dan tidak dapat dihapus.',
+            icon: Icons.sync_rounded,
+          );
+        }
+        return;
+      }
+      await _loadQueue();
+      if (!mounted) return;
+      OmniSnackbar.show(
+        context,
+        message: 'Antrean ${item.title} dihapus dari SQLite lokal.',
+        icon: Icons.delete_outline_rounded,
+        iconColor: AppColors.danger,
+      );
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: 'Gagal menghapus antrean lokal: $error',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    }
   }
 
   void _showPayloadModal(SyncItemModel item) {
-    final prettyJson = const JsonEncoder.withIndent('  ').convert(item.payloadJson);
+    final prettyJson =
+        const JsonEncoder.withIndent('  ').convert(item.payloadJson);
 
     showModalBottomSheet(
       context: context,
@@ -237,7 +317,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 ),
                 IconButton(
                   onPressed: () => Navigator.of(ctx).pop(),
-                  icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                  icon: const Icon(Icons.close_rounded,
+                      color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -318,7 +399,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                       onTap: () => context.go('/dashboard'),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 7),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
@@ -327,7 +409,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.arrow_back_rounded, size: 16, color: AppColors.textPrimary),
+                            Icon(Icons.arrow_back_rounded,
+                                size: 16, color: AppColors.textPrimary),
                             SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -348,7 +431,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: AppColors.primaryLight,
                       borderRadius: BorderRadius.circular(6),
@@ -416,7 +500,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 onTap: () {
                   OmniSnackbar.show(
                     context,
-                    message: 'Log sinkronisasi diekspor: sync_log_20261016.json',
+                    message:
+                        'Log sinkronisasi diekspor: sync_log_20261016.json',
                     icon: Icons.file_download_done_rounded,
                   );
                 },
@@ -430,7 +515,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.file_download_outlined, size: 18, color: Color(0xFF0B1C30)),
+                      Icon(Icons.file_download_outlined,
+                          size: 18, color: Color(0xFF0B1C30)),
                       SizedBox(width: 8),
                       Text(
                         'Ekspor Log Sinkronisasi (.json)',
@@ -488,7 +574,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                   children: [
                     Flexible(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(999),
@@ -496,7 +583,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.autorenew_rounded, size: 13, color: Colors.white),
+                            Icon(Icons.autorenew_rounded,
+                                size: 13, color: Colors.white),
                             SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -582,7 +670,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                             ),
                           )
                         else
-                          const Icon(Icons.sync_rounded, size: 18, color: Color(0xFF004AC6)),
+                          const Icon(Icons.sync_rounded,
+                              size: 18, color: Color(0xFF004AC6)),
                         const SizedBox(width: 8),
                         Text(
                           _isSyncingAll ? 'Menyinkronkan...' : 'Sync Data',
@@ -694,7 +783,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.schedule_rounded, size: 13, color: Color(0xFF434655)),
+                    const Icon(Icons.schedule_rounded,
+                        size: 13, color: Color(0xFF434655)),
                     const SizedBox(width: 4),
                     Text(
                       item.time,
@@ -708,7 +798,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.data_usage_rounded, size: 13, color: Color(0xFF434655)),
+                    const Icon(Icons.data_usage_rounded,
+                        size: 13, color: Color(0xFF434655)),
                     const SizedBox(width: 4),
                     Text(
                       item.size,
@@ -722,7 +813,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.fingerprint_rounded, size: 13, color: Color(0xFF434655)),
+                    const Icon(Icons.fingerprint_rounded,
+                        size: 13, color: Color(0xFF434655)),
                     const SizedBox(width: 4),
                     Text(
                       item.uuid,
@@ -751,7 +843,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                   padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
                   child: Row(
                     children: [
-                      Icon(Icons.code_rounded, size: 15, color: Color(0xFF565E74)),
+                      Icon(Icons.code_rounded,
+                          size: 15, color: Color(0xFF565E74)),
                       SizedBox(width: 5),
                       Text(
                         'Lihat Payload JSON',

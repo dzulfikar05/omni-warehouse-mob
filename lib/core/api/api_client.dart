@@ -24,12 +24,18 @@ class ApiClient {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final token = await SecureStorage.instance.getToken();
-          if (token != null && token.isNotEmpty) {
+          if ((options.headers['Authorization'] == null ||
+                  options.headers['Authorization'].toString().isEmpty) &&
+              token != null &&
+              token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
 
           final tenantSlug = await SecureStorage.instance.getTenantSlug();
-          if (tenantSlug != null && tenantSlug.isNotEmpty) {
+          if ((options.headers['X-Tenant-Slug'] == null ||
+                  options.headers['X-Tenant-Slug'].toString().isEmpty) &&
+              tenantSlug != null &&
+              tenantSlug.isNotEmpty) {
             options.headers['X-Tenant-Slug'] = tenantSlug;
           }
 
@@ -63,7 +69,8 @@ class ApiClient {
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
       case DioExceptionType.connectionError:
-        return const NetworkException('Tidak dapat terhubung ke server backend.');
+        return const NetworkException(
+            'Tidak dapat terhubung ke server backend.');
 
       case DioExceptionType.badResponse:
         final code = error.response?.statusCode;
@@ -86,8 +93,8 @@ class ApiClient {
           return ValidationException(message, errors: errors);
         }
 
-        return ServerException(data is Map && data['message'] != null 
-            ? data['message'].toString() 
+        return ServerException(data is Map && data['message'] != null
+            ? data['message'].toString()
             : 'Terjadi kesalahan server.');
 
       default:

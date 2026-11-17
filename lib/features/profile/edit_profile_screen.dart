@@ -17,13 +17,6 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
-  String _selectedShift = 'pagi';
-
-  final List<Map<String, String>> _shiftOptions = [
-    {'value': 'pagi', 'label': 'Shift Pagi (08:00 - 16:00 WIB)'},
-    {'value': 'siang', 'label': 'Shift Siang (13:00 - 21:00 WIB)'},
-    {'value': 'malam', 'label': 'Shift Malam (21:00 - 05:00 WIB)'},
-  ];
 
   @override
   void initState() {
@@ -116,7 +109,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               _buildPersonalDataCard(userEmail),
               const SizedBox(height: 14),
 
-              // Form Section 2: Penugasan & Shift (Terkunci HR)
+              // Form Section 2: Penugasan (Terkunci HR)
               _buildAssignmentCard(tenantName),
               const SizedBox(height: 16),
 
@@ -413,7 +406,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        'Informasi Penugasan & Shift',
+                        'Informasi Penugasan',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -497,49 +490,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           const Text(
             'Perubahan cabang DC hanya dapat diajukan melalui portal mutasi HRIS.',
             style: TextStyle(fontSize: 10, color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 12),
-
-          // Shift Dropdown
-          _buildFieldLabel('Pilihan Shift Kerja Lapangan'),
-          const SizedBox(height: 6),
-          Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceAlt,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedShift,
-                isExpanded: true,
-                icon: const Icon(Icons.unfold_more_rounded, size: 18, color: AppColors.textSecondary),
-                items: _shiftOptions.map((opt) {
-                  return DropdownMenuItem<String>(
-                    value: opt['value'],
-                    child: Row(
-                      children: [
-                        const Icon(Icons.schedule_rounded, size: 16, color: AppColors.textMuted),
-                        const SizedBox(width: 8),
-                        Text(
-                          opt['label']!,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedShift = val);
-                },
-              ),
-            ),
           ),
         ],
       ),

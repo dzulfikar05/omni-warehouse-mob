@@ -166,9 +166,9 @@ class OutboundItem {
   final String category;
   String? notes;
 
-  bool get isFullyPicked => pickedQty >= orderQty;
+  bool get isFullyPicked => orderQty > 0 && pickedQty >= orderQty;
   int get totalProcessedQty => pickedQty + damagedQty;
-  bool get isFullyPacked => packedQty >= orderQty;
+  bool get isFullyPacked => orderQty > 0 && packedQty >= orderQty;
   int get remainingToPick => (orderQty - pickedQty).clamp(0, orderQty);
 
   factory OutboundItem.fromJson(Map<String, dynamic> json) {
@@ -203,11 +203,12 @@ class OutboundItem {
               .toString(),
       fromRack:
           (json['source_rack'] ??
+                  json['target_rack'] ??
                   json['rack_code'] ??
                   locationMap['rack_code'] ??
                   '')
               .toString(),
-      orderQty: _asInt(json['so_qty'] ?? json['order_qty'] ?? json['quantity']),
+      orderQty: _asInt(json['so_qty'] ?? json['order_qty'] ?? json['quantity'] ?? json['po_qty']),
       skuId: _asInt(json['sku_id'] ?? skuMap['id']),
       pickedQty: _asInt(json['good_qty'] ?? json['picked_qty']),
       damagedQty: _asInt(json['damaged_qty']),
@@ -360,9 +361,9 @@ class OutboundOrder {
       vehicleNo: json['vehicle_no']?.toString(),
       driverName: json['driver_name']?.toString(),
       notes: json['notes']?.toString(),
-      totalUnits: json['total_units'] == null
+      totalUnits: (json['total_units'] ?? json['total_so_units'] ?? json['total_po_units']) == null
           ? null
-          : _asInt(json['total_units']),
+          : _asInt(json['total_units'] ?? json['total_so_units'] ?? json['total_po_units']),
       totalSkus: json['total_skus'] == null && json['total_sku'] == null
           ? null
           : _asInt(json['total_skus'] ?? json['total_sku']),

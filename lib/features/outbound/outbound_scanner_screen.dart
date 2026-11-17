@@ -91,9 +91,22 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
       _damageNoteController.text = item.notes ?? '';
       _selectedSourceRackId = item.sourceRackId;
     });
+    _openItemPickingSheet(item);
   }
 
-  Future<void> _verifyBarcode([String? value]) async {
+  OutboundItem? _findItemByCode(String code) {
+    if (_detail == null) return null;
+    final clean = code.trim().toLowerCase();
+    for (final item in _detail!.items) {
+      if (item.barcode.trim().toLowerCase() == clean ||
+          item.sku.trim().toLowerCase() == clean) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _handleBarcodeSubmit([String? value]) async {
     if (_isScanning) return;
     final barcode = (value ?? _barcodeController.text).trim();
     if (barcode.isEmpty) {
@@ -105,6 +118,15 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
       return;
     }
 
+    final matched = _findItemByCode(barcode);
+    if (matched != null) {
+      _barcodeController.clear();
+      HapticFeedback.mediumImpact();
+      _selectItem(matched);
+      return;
+    }
+
+    // Jika belum ada di list lokal, coba panggil API verifyBarcode backend
     setState(() => _isScanning = true);
     try {
       await ref
@@ -115,25 +137,20 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
           .loadManifestDetail(widget.code);
       if (!mounted) return;
 
-      final normalized = barcode.toLowerCase();
-      final matched = detail.items
-          .where(
-            (item) =>
-                item.sku.toLowerCase() == normalized ||
-                item.barcode.toLowerCase() == normalized,
-          )
-          .firstOrNull;
       setState(() => _detail = detail);
-      if (matched != null) {
-        _selectItem(matched);
-        HapticFeedback.mediumImpact();
+      final refreshedMatch = _findItemByCode(barcode);
+      _barcodeController.clear();
+      HapticFeedback.mediumImpact();
+
+      if (refreshedMatch != null) {
+        _selectItem(refreshedMatch);
+      } else {
         OmniSnackbar.show(
           context,
-          message: 'Barcode terverifikasi: ${matched.sku}',
+          message: 'Barcode berhasil diverifikasi (+1 unit).',
           icon: Icons.check_circle_rounded,
         );
       }
-      _barcodeController.clear();
     } catch (error) {
       if (mounted) {
         OmniSnackbar.show(
@@ -165,47 +182,19 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
 
     if (scannedCode != null && scannedCode.trim().isNotEmpty && mounted) {
       _barcodeController.text = scannedCode;
-      await _verifyBarcode(scannedCode);
+      await _handleBarcodeSubmit(scannedCode);
     }
   }
 
-  Future<void> _savePicking() async {
-    final item = _selectedItem;
-    if (item == null || _isSaving) return;
-
-    final goodQty = int.tryParse(_goodQtyController.text.trim());
-    final damagedQty = int.tryParse(_damagedQtyController.text.trim());
-    if (goodQty == null ||
-        damagedQty == null ||
-        goodQty < 0 ||
-        damagedQty < 0) {
-      OmniSnackbar.show(
-        context,
-        message: 'Jumlah picking harus berupa angka nol atau lebih.',
-        icon: Icons.error_outline_rounded,
-      );
-      return;
-    }
-
-    final sourceRackId = _selectedSourceRackId ?? item.sourceRackId;
-    if ((_detail?.locations.isNotEmpty ?? false) && sourceRackId == null) {
-      OmniSnackbar.show(
-        context,
-        message: 'Pilih rak asal untuk item ini.',
-        icon: Icons.error_outline_rounded,
-      );
-      return;
-    }
-
+  Future<void> _savePickingData({
+    required OutboundItem item,
+    required int goodQty,
+    required int damagedQty,
+    required int? sourceRackId,
+    String? damageNote,
+  }) async {
     final itemId = int.tryParse(item.id);
-    if (itemId == null) {
-      OmniSnackbar.show(
-        context,
-        message: 'ID item outbound tidak valid.',
-        icon: Icons.error_outline_rounded,
-      );
-      return;
-    }
+    if (itemId == null) return;
 
     setState(() => _isSaving = true);
     try {
@@ -216,9 +205,7 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
         goodQty: goodQty,
         damagedQty: damagedQty,
         sourceRackId: sourceRackId,
-        damageNote: _damageNoteController.text.trim().isEmpty
-            ? null
-            : _damageNoteController.text.trim(),
+        damageNote: damageNote,
       );
       if (!mounted) return;
 
@@ -234,12 +221,15 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
             locations: _detail?.locations ?? const [],
           );
         });
-        if (refreshedItem != null) _selectItem(refreshedItem);
+        if (refreshedItem != null) {
+          _selectedItem = refreshedItem;
+        }
       }
       HapticFeedback.mediumImpact();
       OmniSnackbar.show(
         context,
-        message: 'Alokasi picking ${item.sku} berhasil disimpan.',
+        message:
+            'Hasil picking ${item.sku.isEmpty ? item.barcode : item.sku} ($goodQty unit) berhasil disimpan.',
         icon: Icons.check_circle_rounded,
       );
     } catch (error) {
@@ -253,6 +243,376 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _openItemPickingSheet(OutboundItem item) {
+    final order = _detail!.manifest;
+    final canEdit =
+        order.status != OutboundStatus.dispatched &&
+        order.status != OutboundStatus.hold;
+
+    final initialGoodQty = item.pickedQty > 0
+        ? item.pickedQty
+        : (item.orderQty - item.damagedQty > 0
+              ? item.orderQty - item.damagedQty
+              : item.orderQty);
+
+    final goodQtyCtrl = TextEditingController(text: initialGoodQty.toString());
+    final damagedQtyCtrl = TextEditingController(
+      text: item.damagedQty.toString(),
+    );
+    final damageNoteCtrl = TextEditingController(text: item.notes ?? '');
+    final rackCode = item.fromRack.isNotEmpty &&
+            item.fromRack != 'Belum Dialokasi' &&
+            item.fromRack != 'Belum dialokasikan'
+        ? item.fromRack
+        : (_rackById(item.sourceRackId)?.rackCode ?? 'Belum dialokasikan');
+    final hasValidRack = rackCode != 'Belum dialokasikan' &&
+        rackCode != 'Belum Dialokasi' &&
+        rackCode.isNotEmpty;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void updateGoodQty(int delta) {
+              final val = (int.tryParse(goodQtyCtrl.text.trim()) ?? 0) + delta;
+              if (val >= 0) {
+                goodQtyCtrl.text = val.toString();
+                setSheetState(() {});
+              }
+            }
+
+            void updateDamagedQty(int delta) {
+              final val =
+                  (int.tryParse(damagedQtyCtrl.text.trim()) ?? 0) + delta;
+              if (val >= 0) {
+                damagedQtyCtrl.text = val.toString();
+                setSheetState(() {});
+              }
+            }
+
+            final isComplete =
+                ((int.tryParse(goodQtyCtrl.text.trim()) ?? 0) +
+                    (int.tryParse(damagedQtyCtrl.text.trim()) ?? 0)) >=
+                item.orderQty;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          margin: const EdgeInsets.only(top: 4, bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFCBD5E1),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLight,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.outbox_rounded,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        item.sku.isEmpty
+                                            ? item.barcode
+                                            : item.sku,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w800,
+                                          fontFamily: 'RobotoMono',
+                                          color: AppColors.textPrimary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isComplete
+                                            ? AppColors.successLight
+                                            : AppColors.surfaceAlt,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: isComplete
+                                              ? AppColors.successBorder
+                                              : AppColors.border,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Pesanan: ${item.orderQty} unit',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: isComplete
+                                              ? AppColors.success
+                                              : AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.name,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              size: 20,
+                              color: AppColors.textMuted,
+                            ),
+                            onPressed: () => Navigator.pop(sheetContext),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 20),
+
+                      // 2 Quantity Inputs with Steppers
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _quantityStepper(
+                              label: 'Jumlah Picked (Baik)',
+                              controller: goodQtyCtrl,
+                              enabled: canEdit,
+                              onMinus: () => updateGoodQty(-1),
+                              onPlus: () => updateGoodQty(1),
+                              prefixIcon: Icons.check_circle_outline_rounded,
+                              iconColor: AppColors.success,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _quantityStepper(
+                              label: 'Rusak / Batal di Rak',
+                              controller: damagedQtyCtrl,
+                              enabled: canEdit,
+                              onMinus: () => updateDamagedQty(-1),
+                              onPlus: () => updateDamagedQty(1),
+                              prefixIcon: Icons.warning_amber_rounded,
+                              iconColor: AppColors.warning,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Read-only Source Rack Info Card
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: hasValidRack
+                              ? AppColors.primaryLight.withOpacity(0.4)
+                              : AppColors.warningLight.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: hasValidRack
+                                ? AppColors.primaryBorder
+                                : AppColors.warningBorder,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: hasValidRack
+                                    ? AppColors.primary
+                                    : AppColors.warning,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.shelves,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'LOKASI RAK PENGAMBILAN',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.5,
+                                      color: hasValidRack
+                                          ? AppColors.primary
+                                          : AppColors.warning,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    rackCode,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      fontFamily: 'RobotoMono',
+                                      color: hasValidRack
+                                          ? AppColors.textPrimary
+                                          : AppColors.warning,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    hasValidRack
+                                        ? 'Ambil barang langsung dari rak ini sesuai alokasi sistem'
+                                        : 'Rak belum dialokasikan di sistem',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Damage / Condition Note
+                      TextField(
+                        controller: damageNoteCtrl,
+                        enabled: canEdit,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          labelText: 'Catatan kondisi / kerusakan (opsional)',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // Save Picking Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: canEdit && !_isSaving
+                              ? () async {
+                                  final goodQty =
+                                      int.tryParse(goodQtyCtrl.text.trim()) ??
+                                      0;
+                                  final damagedQty =
+                                      int.tryParse(
+                                        damagedQtyCtrl.text.trim(),
+                                      ) ??
+                                      0;
+
+                                  Navigator.pop(sheetContext);
+                                  await _savePickingData(
+                                    item: item,
+                                    goodQty: goodQty,
+                                    damagedQty: damagedQty,
+                                    sourceRackId: item.sourceRackId,
+                                    damageNote:
+                                        damageNoteCtrl.text.trim().isEmpty
+                                        ? null
+                                        : damageNoteCtrl.text.trim(),
+                                  );
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: _isSaving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.check_circle_outline_rounded,
+                                  size: 18,
+                                ),
+                          label: Text(
+                            _isSaving ? 'Menyimpan...' : 'Simpan Hasil Picking',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _changeHoldStatus(OutboundOrder order) async {
@@ -483,10 +843,6 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
             ),
             const SizedBox(height: 12),
             _buildItemsCard(items, order),
-            if (_selectedItem != null) ...[
-              const SizedBox(height: 12),
-              _buildPickingCard(order),
-            ],
           ],
         ),
       ),
@@ -501,11 +857,8 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconButton(
-                onPressed: () => context.go('/outbound'),
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,9 +869,11 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
+                        fontFamily: 'RobotoMono',
                         color: AppColors.textPrimary,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       'Customer: ${order.customer}',
                       maxLines: 1,
@@ -531,6 +886,7 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               _statusBadge(order.status),
             ],
           ),
@@ -603,34 +959,72 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Verifikasi Barcode / SKU',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
+          Row(
+            children: [
+              const Icon(
+                Icons.qr_code_scanner_rounded,
+                size: 18,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Scan Barcode / Cari SKU Picking',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Auto-Focus Item',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           const Text(
-            'Gunakan scanner perangkat atau masukkan kode barang.',
+            'Tembak dengan laser PDA, buka kamera, atau ketik SKU jika barcode rusak.',
             style: TextStyle(fontSize: 11, color: AppColors.textMuted),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _barcodeController,
                   enabled: canScan && !_isScanning,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: _verifyBarcode,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _handleBarcodeSubmit(),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontFamily: 'RobotoMono',
+                    fontWeight: FontWeight.w600,
+                  ),
                   decoration: InputDecoration(
-                    hintText: 'Scan barcode / kode SKU...',
+                    hintText: 'Scan barcode / ketik SKU...',
+                    hintStyle: const TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'RobotoMono',
+                      fontWeight: FontWeight.normal,
+                    ),
                     prefixIcon: IconButton(
                       icon: const Icon(
                         Icons.camera_alt_rounded,
                         color: AppColors.primary,
+                        size: 20,
                       ),
                       tooltip: 'Buka Kamera Scanner',
                       onPressed:
@@ -638,33 +1032,51 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                           ? _openCameraScanner
                           : null,
                     ),
+                    suffixIcon: _barcodeController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 18),
+                            onPressed: () =>
+                                setState(() => _barcodeController.clear()),
+                          )
+                        : null,
                     isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
+                  onChanged: (_) => setState(() {}),
                 ),
               ),
               const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: canScan && !_isScanning ? _verifyBarcode : null,
+              ElevatedButton.icon(
+                onPressed: canScan && !_isScanning
+                    ? () => _handleBarcodeSubmit()
+                    : null,
                 style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(48, 50),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
+                  minimumSize: const Size(48, 46),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: _isScanning
+                icon: _isScanning
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: AppColors.surface,
+                          color: Colors.white,
                         ),
                       )
-                    : const Text('Verifikasi'),
+                    : const Icon(Icons.search_rounded, size: 18),
+                label: const Text(
+                  'Buka',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
@@ -752,17 +1164,27 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
       );
 
   Widget _buildItemRow(OutboundItem item, OutboundOrder order) {
+    final canEdit =
+        order.status != OutboundStatus.dispatched &&
+        order.status != OutboundStatus.hold;
+    final isInvalidQty = item.orderQty <= 0;
+    final isDone = item.orderQty > 0 && item.totalProcessedQty >= item.orderQty;
+    final hasDamage = item.damagedQty > 0;
     final selected = _selectedItem?.id == item.id;
-    final isComplete = item.totalProcessedQty >= item.orderQty;
     final sourceRack = _rackById(item.sourceRackId)?.rackCode ?? item.fromRack;
+    final hasValidRack =
+        sourceRack.isNotEmpty &&
+        sourceRack != 'Belum Dialokasi' &&
+        sourceRack != 'Belum dialokasikan';
+
     return InkWell(
-      onTap: order.status == OutboundStatus.dispatched
-          ? null
-          : () => _selectItem(item),
+      onTap: canEdit ? () => _selectItem(item) : null,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primaryLight : AppColors.surface,
+          color: selected
+              ? AppColors.primaryLight.withValues(alpha: 0.4)
+              : (isDone ? const Color(0xFFF0FDF4) : AppColors.surface),
           border: const Border(bottom: BorderSide(color: AppColors.border)),
         ),
         child: Column(
@@ -771,26 +1193,53 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    item.sku.isEmpty ? item.barcode : item.sku,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      color: AppColors.textPrimary,
-                    ),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          item.sku.isEmpty ? item.barcode : item.sku,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'RobotoMono',
+                            fontSize: 12,
+                            color: isDone
+                                ? const Color(0xFF166534)
+                                : AppColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isDone) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          size: 14,
+                          color: AppColors.success,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 Text(
-                  '${item.totalProcessedQty}/${item.orderQty} unit',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
+                  isInvalidQty
+                      ? '0/0 unit'
+                      : '${item.totalProcessedQty}/${item.orderQty} unit',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'RobotoMono',
+                    fontWeight: FontWeight.w700,
+                    color: isInvalidQty
+                        ? AppColors.danger
+                        : (isDone
+                              ? AppColors.success
+                              : (item.totalProcessedQty > 0
+                                    ? AppColors.warning
+                                    : AppColors.textSecondary)),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               item.name,
               softWrap: true,
@@ -800,24 +1249,56 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                 color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 7),
-            Wrap(
-              spacing: 7,
-              runSpacing: 7,
-              children: [
-                _tag(
-                  sourceRack.isEmpty ? 'Belum dialokasikan' : sourceRack,
-                  sourceRack.isEmpty
-                      ? AppColors.surfaceAlt
-                      : AppColors.primaryLight,
-                  sourceRack.isEmpty ? AppColors.textMuted : AppColors.primary,
-                ),
-                _tag(
-                  isComplete ? 'Selesai picking' : 'Menunggu picking',
-                  isComplete ? AppColors.successLight : AppColors.surfaceAlt,
-                  isComplete ? AppColors.success : AppColors.textMuted,
-                ),
-              ],
+            const SizedBox(height: 6),
+            Builder(
+              builder: (context) {
+                final String rackText = hasValidRack
+                    ? '📍 Rak Sumber: $sourceRack'
+                    : '⚠️ Belum dialokasikan';
+                final Color rackBg = hasValidRack
+                    ? AppColors.primaryLight
+                    : AppColors.warningLight;
+                final Color rackFg =
+                    hasValidRack ? AppColors.primary : AppColors.warning;
+
+                final String statusText;
+                final Color statusBg;
+                final Color statusFg;
+
+                if (isInvalidQty) {
+                  statusText = '⚠️ Order 0 Unit (Data Invalid)';
+                  statusBg = const Color(0xFFFEF2F2);
+                  statusFg = AppColors.danger;
+                } else if (isDone) {
+                  statusText = 'Lengkap Dipick (100%)';
+                  statusBg = AppColors.successLight;
+                  statusFg = AppColors.success;
+                } else if (item.totalProcessedQty > 0) {
+                  statusText =
+                      'Dipick: ${item.totalProcessedQty}/${item.orderQty} unit';
+                  statusBg = AppColors.warningLight;
+                  statusFg = AppColors.warning;
+                } else {
+                  statusText = 'Menunggu picking';
+                  statusBg = AppColors.surfaceAlt;
+                  statusFg = AppColors.textMuted;
+                }
+
+                return Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _tag(rackText, rackBg, rackFg),
+                    _tag(statusText, statusBg, statusFg),
+                    if (hasDamage)
+                      _tag(
+                        '${item.damagedQty} Batal/Rusak di Rak',
+                        const Color(0xFFFEF2F2),
+                        AppColors.danger,
+                      ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -825,140 +1306,86 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
     );
   }
 
-  Widget _buildPickingCard(OutboundOrder order) {
-    final item = _selectedItem!;
-    final canEdit =
-        order.status != OutboundStatus.dispatched &&
-        order.status != OutboundStatus.hold;
-    final locations = _detail!.locations;
-    final rackValue =
-        locations.any((location) => location.id == _selectedSourceRackId)
-        ? _selectedSourceRackId
-        : null;
-
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Edit / Alokasi Rak Asal',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+  Widget _quantityStepper({
+    required String label,
+    required TextEditingController controller,
+    required bool enabled,
+    required VoidCallback onMinus,
+    required VoidCallback onPlus,
+    IconData? prefixIcon,
+    Color? iconColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (prefixIcon != null) ...[
+              Icon(
+                prefixIcon,
+                size: 14,
+                color: iconColor ?? AppColors.textSecondary,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
             ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 46,
+          decoration: BoxDecoration(
+            color: enabled ? AppColors.surfaceAlt : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
           ),
-          const SizedBox(height: 4),
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: item.sku,
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.remove_rounded, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 46),
+                color: AppColors.textSecondary,
+                onPressed: enabled ? onMinus : null,
+              ),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  enabled: enabled,
+                  textAlign: TextAlign.center,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'RobotoMono',
+                    color: AppColors.textPrimary,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
                   ),
                 ),
-                TextSpan(text: ' · ${item.name}'),
-              ],
-            ),
-            softWrap: true,
-            style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _quantityField(
-                  label: 'Jumlah baik',
-                  controller: _goodQtyController,
-                  enabled: canEdit,
-                ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _quantityField(
-                  label: 'Jumlah rusak',
-                  controller: _damagedQtyController,
-                  enabled: canEdit,
-                ),
+              IconButton(
+                icon: const Icon(Icons.add_rounded, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 46),
+                color: AppColors.primary,
+                onPressed: enabled ? onPlus : null,
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          const Text(
-            'Rak Asal (Source Rack)',
-            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 5),
-          DropdownButtonFormField<int>(
-            initialValue: rackValue,
-            isExpanded: true,
-            hint: const Text('Pilih rak asal'),
-            items: locations
-                .map(
-                  (location) => DropdownMenuItem(
-                    value: location.id,
-                    child: Text(location.rackCode),
-                  ),
-                )
-                .toList(),
-            onChanged: canEdit
-                ? (rackId) => setState(() => _selectedSourceRackId = rackId)
-                : null,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-          if (locations.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 5),
-              child: Text(
-                'Daftar rak asal tidak tersedia pada detail manifes.',
-                style: TextStyle(fontSize: 10, color: AppColors.textMuted),
-              ),
-            ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _damageNoteController,
-            enabled: canEdit,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'Catatan kerusakan (opsional)',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: canEdit && !_isSaving ? _savePicking : null,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-              ),
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 17,
-                      height: 17,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.surface,
-                      ),
-                    )
-                  : const Icon(Icons.save_outlined, size: 18),
-              label: Text(
-                _isSaving ? 'Menyimpan picking...' : 'Simpan Alokasi Rak',
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -968,22 +1395,6 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
         .where((location) => location.id == rackId)
         .firstOrNull;
   }
-
-  Widget _quantityField({
-    required String label,
-    required TextEditingController controller,
-    required bool enabled,
-  }) => TextField(
-    controller: controller,
-    enabled: enabled,
-    keyboardType: TextInputType.number,
-    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-    decoration: InputDecoration(
-      labelText: label,
-      border: const OutlineInputBorder(),
-      isDense: true,
-    ),
-  );
 
   Widget _statusBadge(OutboundStatus status) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

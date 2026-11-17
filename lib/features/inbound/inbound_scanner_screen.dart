@@ -110,13 +110,26 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
               ? item.targetRack
               : (_availableRacks.isEmpty ? null : _availableRacks.first);
     });
+    _openItemPutawaySheet(item);
   }
 
-  Future<void> _verifyBarcode() async {
+  InboundItem? _findItemByCode(String code) {
+    if (_detail == null) return null;
+    final clean = code.trim().toLowerCase();
+    for (final item in _detail!.items) {
+      if (item.barcode.trim().toLowerCase() == clean ||
+          item.sku.trim().toLowerCase() == clean) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _handleBarcodeSubmit() async {
     if (_isScanning) return;
 
-    final barcode = _barcodeController.text.trim();
-    if (barcode.isEmpty) {
+    final code = _barcodeController.text.trim();
+    if (code.isEmpty) {
       OmniSnackbar.show(
         context,
         message: 'Masukkan atau scan barcode/SKU terlebih dahulu.',
@@ -125,18 +138,31 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
       return;
     }
 
+    final matched = _findItemByCode(code);
+    if (matched != null) {
+      _barcodeController.clear();
+      HapticFeedback.mediumImpact();
+      _selectItem(matched);
+      return;
+    }
+
+    // Jika belum ditemukan di cache lokal, coba panggil API verifyBarcode backend
     setState(() => _isScanning = true);
     try {
       await ref
           .read(inboundRepositoryProvider.notifier)
-          .verifyBarcode(widget.code, barcode);
+          .verifyBarcode(widget.code, code);
       await _loadDetail(showLoading: false);
       _barcodeController.clear();
       HapticFeedback.mediumImpact();
-      if (mounted) {
+
+      final refreshedMatch = _findItemByCode(code);
+      if (refreshedMatch != null && mounted) {
+        _selectItem(refreshedMatch);
+      } else if (mounted) {
         OmniSnackbar.show(
           context,
-          message: 'Barcode berhasil diverifikasi.',
+          message: 'Barcode berhasil diverifikasi (+1 unit).',
           icon: Icons.check_circle_rounded,
         );
       }
@@ -171,39 +197,19 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
 
     if (scannedCode != null && scannedCode.trim().isNotEmpty && mounted) {
       _barcodeController.text = scannedCode;
-      await _verifyBarcode();
+      await _handleBarcodeSubmit();
     }
   }
 
-  Future<void> _savePutaway() async {
-    final item = _selectedItem;
-    if (item == null) return;
-
-    final goodQty = int.tryParse(_goodQtyController.text.trim());
-    final damagedQty = int.tryParse(_damagedQtyController.text.trim());
-    if (goodQty == null ||
-        damagedQty == null ||
-        goodQty < 0 ||
-        damagedQty < 0) {
-      OmniSnackbar.show(
-        context,
-        message: 'Jumlah fisik harus bernilai angka valid.',
-        icon: Icons.error_outline_rounded,
-      );
-      return;
-    }
-
+  Future<void> _savePutawayData({
+    required InboundItem item,
+    required int goodQty,
+    required int damagedQty,
+    required String targetRack,
+    String? damageNote,
+  }) async {
     final itemId = int.tryParse(item.id);
     if (itemId == null) return;
-
-    if (_selectedRack == null || _selectedRack!.isEmpty) {
-      OmniSnackbar.show(
-        context,
-        message: 'Pilih lokasi rak tujuan.',
-        icon: Icons.error_outline_rounded,
-      );
-      return;
-    }
 
     setState(() => _isSaving = true);
     try {
@@ -212,16 +218,16 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
             itemId: itemId,
             goodQty: goodQty,
             damagedQty: damagedQty,
-            targetRack: _selectedRack!,
-            damageNote: _damageNoteController.text.trim().isEmpty
-                ? null
-                : _damageNoteController.text.trim(),
+            targetRack: targetRack,
+            damageNote: damageNote,
           );
       await _loadDetail(showLoading: false);
+      HapticFeedback.mediumImpact();
       if (!mounted) return;
       OmniSnackbar.show(
         context,
-        message: 'Alokasi rak dan kuantitas fisik berhasil disimpan.',
+        message:
+            'Item ${item.sku.isEmpty ? item.barcode : item.sku} ($goodQty baik, $damagedQty rusak) disimpan ke Rak $targetRack.',
         icon: Icons.check_circle_rounded,
       );
     } catch (error) {
@@ -235,6 +241,324 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _openItemPutawaySheet(InboundItem item) {
+    final canEdit = _detail!.manifest.status != InboundStatus.closed &&
+        _detail!.manifest.status != InboundStatus.hold;
+
+    final initialGoodQty = item.goodQty > 0
+        ? item.goodQty
+        : (item.expectedQty - item.damagedQty > 0
+            ? item.expectedQty - item.damagedQty
+            : item.expectedQty);
+
+    final goodQtyCtrl = TextEditingController(text: initialGoodQty.toString());
+    final damagedQtyCtrl =
+        TextEditingController(text: item.damagedQty.toString());
+    final damageNoteCtrl = TextEditingController(text: item.notes ?? '');
+    String? currentRack = item.targetRack != null &&
+            _availableRacks.contains(item.targetRack)
+        ? item.targetRack
+        : (_availableRacks.isNotEmpty ? _availableRacks.first : null);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void updateGoodQty(int delta) {
+              final val = (int.tryParse(goodQtyCtrl.text.trim()) ?? 0) + delta;
+              if (val >= 0) {
+                goodQtyCtrl.text = val.toString();
+                setSheetState(() {});
+              }
+            }
+
+            void updateDamagedQty(int delta) {
+              final val =
+                  (int.tryParse(damagedQtyCtrl.text.trim()) ?? 0) + delta;
+              if (val >= 0) {
+                damagedQtyCtrl.text = val.toString();
+                setSheetState(() {});
+              }
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          margin: const EdgeInsets.only(top: 4, bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFCBD5E1),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLight,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.inventory_2_outlined,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        item.sku.isEmpty
+                                            ? item.barcode
+                                            : item.sku,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w800,
+                                          fontFamily: 'RobotoMono',
+                                          color: AppColors.textPrimary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: item.isCompleted
+                                            ? AppColors.successLight
+                                            : AppColors.surfaceAlt,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: item.isCompleted
+                                              ? AppColors.successBorder
+                                              : AppColors.border,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Target PO: ${item.expectedQty} unit',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: item.isCompleted
+                                              ? AppColors.success
+                                              : AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.name,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded,
+                                size: 20, color: AppColors.textMuted),
+                            onPressed: () => Navigator.pop(sheetContext),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 20),
+
+                      // 2 Quantity Inputs with Steppers
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _quantityStepper(
+                              label: 'Jumlah Baik (Unit)',
+                              controller: goodQtyCtrl,
+                              enabled: canEdit,
+                              onMinus: () => updateGoodQty(-1),
+                              onPlus: () => updateGoodQty(1),
+                              prefixIcon: Icons.check_circle_outline_rounded,
+                              iconColor: AppColors.success,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _quantityStepper(
+                              label: 'Jumlah Rusak (Unit)',
+                              controller: damagedQtyCtrl,
+                              enabled: canEdit,
+                              onMinus: () => updateDamagedQty(-1),
+                              onPlus: () => updateDamagedQty(1),
+                              prefixIcon: Icons.warning_amber_rounded,
+                              iconColor: AppColors.warning,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Rack Selection
+                      const Text(
+                        'Lokasi Rak Tujuan Putaway',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        value: _availableRacks.contains(currentRack)
+                            ? currentRack
+                            : null,
+                        isExpanded: true,
+                        hint: const Text('Pilih lokasi rak tujuan'),
+                        items: _availableRacks
+                            .map((rack) => DropdownMenuItem(
+                                  value: rack,
+                                  child: Text(rack),
+                                ))
+                            .toList(),
+                        onChanged: canEdit
+                            ? (rack) =>
+                                setSheetState(() => currentRack = rack)
+                            : null,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.grid_view_rounded,
+                              size: 18, color: AppColors.textSecondary),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Damage Note
+                      TextField(
+                        controller: damageNoteCtrl,
+                        enabled: canEdit,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          labelText: 'Catatan kondisi / kerusakan (opsional)',
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // Save Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: canEdit && !_isSaving
+                              ? () async {
+                                  final goodQty = int.tryParse(
+                                          goodQtyCtrl.text.trim()) ??
+                                      0;
+                                  final damagedQty = int.tryParse(
+                                          damagedQtyCtrl.text.trim()) ??
+                                      0;
+
+                                  if (currentRack == null ||
+                                      currentRack!.isEmpty) {
+                                    OmniSnackbar.show(
+                                      context,
+                                      message:
+                                          'Pilih lokasi rak tujuan terlebih dahulu.',
+                                      icon: Icons.error_outline_rounded,
+                                    );
+                                    return;
+                                  }
+
+                                  Navigator.pop(sheetContext);
+                                  await _savePutawayData(
+                                    item: item,
+                                    goodQty: goodQty,
+                                    damagedQty: damagedQty,
+                                    targetRack: currentRack!,
+                                    damageNote:
+                                        damageNoteCtrl.text.trim().isEmpty
+                                            ? null
+                                            : damageNoteCtrl.text.trim(),
+                                  );
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: _isSaving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.check_circle_outline_rounded,
+                                  size: 18),
+                          label: Text(
+                            _isSaving
+                                ? 'Menyimpan...'
+                                : 'Simpan & Alokasikan ke Rak',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _changeHoldStatus(InboundManifest manifest) async {
@@ -463,10 +787,6 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
             ),
             const SizedBox(height: 12),
             _buildItemsCard(items),
-            if (_selectedItem != null) ...[
-              const SizedBox(height: 12),
-              _buildPutawayCard(),
-            ],
           ],
         ),
       ),
@@ -481,11 +801,8 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconButton(
-                onPressed: () => context.go('/inbound'),
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -495,10 +812,12 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
+                        fontFamily: 'RobotoMono',
                         color: AppColors.textPrimary,
                       ),
                       softWrap: true,
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       manifest.supplierName,
                       style: const TextStyle(
@@ -509,6 +828,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               _statusBadge(manifest.status),
             ],
           ),
@@ -580,66 +900,116 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Verifikasi Barcode / SKU',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
+          Row(
+            children: [
+              const Icon(
+                Icons.qr_code_scanner_rounded,
+                size: 18,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Scan Barcode / Cari SKU',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Auto-Focus Item',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           const Text(
-            'Gunakan scanner perangkat atau masukkan kode barang.',
+            'Tembak dengan laser PDA, buka kamera, atau ketik SKU jika barcode rusak.',
             style: TextStyle(fontSize: 11, color: AppColors.textMuted),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _barcodeController,
                   enabled: canScan && !_isScanning,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _verifyBarcode(),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _handleBarcodeSubmit(),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontFamily: 'RobotoMono',
+                    fontWeight: FontWeight.w600,
+                  ),
                   decoration: InputDecoration(
-                    hintText: 'Scan barcode / kode SKU...',
+                    hintText: 'Scan barcode / ketik SKU...',
+                    hintStyle: const TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'RobotoMono',
+                      fontWeight: FontWeight.normal,
+                    ),
                     prefixIcon: IconButton(
                       icon: const Icon(Icons.camera_alt_rounded,
-                          color: AppColors.primary),
+                          color: AppColors.primary, size: 20),
                       tooltip: 'Buka Kamera Scanner',
-                      onPressed:
-                          canScan && !_isScanning && !_isCameraScannerOpen
-                              ? _openCameraScanner
-                              : null,
+                      onPressed: canScan && !_isScanning && !_isCameraScannerOpen
+                          ? _openCameraScanner
+                          : null,
                     ),
+                    suffixIcon: _barcodeController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 18),
+                            onPressed: () =>
+                                setState(() => _barcodeController.clear()),
+                          )
+                        : null,
                     isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
+                  onChanged: (_) => setState(() {}),
                 ),
               ),
               const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: canScan && !_isScanning ? _verifyBarcode : null,
+              ElevatedButton.icon(
+                onPressed: canScan && !_isScanning ? _handleBarcodeSubmit : null,
                 style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(48, 50),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
+                  minimumSize: const Size(48, 46),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: _isScanning
+                icon: _isScanning
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: AppColors.surface,
+                          color: Colors.white,
                         ),
                       )
-                    : const Text('Verifikasi'),
+                    : const Icon(Icons.search_rounded, size: 18),
+                label: const Text(
+                  'Buka',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
@@ -729,15 +1099,20 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
   }
 
   Widget _buildItemRow(InboundItem item) {
+    final canEdit = _detail!.manifest.status != InboundStatus.closed &&
+        _detail!.manifest.status != InboundStatus.hold;
+    final isDone = item.isCompleted;
+    final hasDamage = item.damagedQty > 0;
     final selected = _selectedItem?.id == item.id;
+
     return InkWell(
-      onTap: _detail!.manifest.status == InboundStatus.closed
-          ? null
-          : () => _selectItem(item),
+      onTap: canEdit ? () => _selectItem(item) : null,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primaryLight : AppColors.surface,
+          color: selected
+              ? AppColors.primaryLight.withValues(alpha: 0.4)
+              : (isDone ? const Color(0xFFF0FDF4) : AppColors.surface),
           border: const Border(
             bottom: BorderSide(color: AppColors.border),
           ),
@@ -748,26 +1123,46 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    item.sku.isEmpty ? item.barcode : item.sku,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      color: AppColors.textPrimary,
-                    ),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          item.sku.isEmpty ? item.barcode : item.sku,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'RobotoMono',
+                            fontSize: 12,
+                            color: isDone
+                                ? const Color(0xFF166534)
+                                : AppColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isDone) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.check_circle_rounded,
+                            size: 14, color: AppColors.success),
+                      ],
+                    ],
                   ),
                 ),
                 Text(
-                  '${item.goodQty + item.damagedQty}/${item.expectedQty} unit',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
+                  '${item.totalScanned}/${item.expectedQty} unit',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'RobotoMono',
+                    fontWeight: FontWeight.w700,
+                    color: isDone
+                        ? AppColors.success
+                        : (item.totalScanned > 0
+                            ? AppColors.warning
+                            : AppColors.textSecondary),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               item.name,
               style: const TextStyle(
@@ -777,27 +1172,45 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
               ),
               softWrap: true,
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 6),
             Wrap(
-              spacing: 7,
-              runSpacing: 7,
+              spacing: 6,
+              runSpacing: 6,
               children: [
                 _tag(
-                  item.targetRack ?? 'Belum dialokasikan',
-                  item.targetRack == null
-                      ? AppColors.surfaceAlt
-                      : AppColors.primaryLight,
-                  item.targetRack == null
-                      ? AppColors.textMuted
-                      : AppColors.primary,
+                  item.targetRack != null
+                      ? 'Rak ${item.targetRack}'
+                      : 'Belum di rak',
+                  item.targetRack != null
+                      ? AppColors.primaryLight
+                      : AppColors.surfaceAlt,
+                  item.targetRack != null
+                      ? AppColors.primary
+                      : AppColors.textMuted,
                 ),
                 _tag(
-                  item.isCompleted ? 'Selesai' : 'Menunggu scan',
-                  item.isCompleted
+                  isDone
+                      ? 'Lengkap (100%)'
+                      : (item.totalScanned > 0
+                          ? 'Sebagian (${item.totalScanned} unit)'
+                          : 'Menunggu scan'),
+                  isDone
                       ? AppColors.successLight
-                      : AppColors.surfaceAlt,
-                  item.isCompleted ? AppColors.success : AppColors.textMuted,
+                      : (item.totalScanned > 0
+                          ? AppColors.warningLight
+                          : AppColors.surfaceAlt),
+                  isDone
+                      ? AppColors.success
+                      : (item.totalScanned > 0
+                          ? AppColors.warning
+                          : AppColors.textMuted),
                 ),
+                if (hasDamage)
+                  _tag(
+                    '${item.damagedQty} Rusak/BAP',
+                    const Color(0xFFFEF2F2),
+                    AppColors.danger,
+                  ),
               ],
             ),
           ],
@@ -806,147 +1219,85 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
     );
   }
 
-  Widget _buildPutawayCard() {
-    final item = _selectedItem!;
-    final canEdit = _detail!.manifest.status != InboundStatus.closed &&
-        _detail!.manifest.status != InboundStatus.hold;
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Edit / Alokasi Rak',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: item.sku,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                TextSpan(text: ' · ${item.name}'),
-              ],
-            ),
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.textMuted,
-            ),
-            softWrap: true,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _quantityField(
-                  label: 'Jumlah baik',
-                  controller: _goodQtyController,
-                  enabled: canEdit,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _quantityField(
-                  label: 'Jumlah rusak',
-                  controller: _damagedQtyController,
-                  enabled: canEdit,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Lokasi Rak',
-            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 5),
-          DropdownButtonFormField<String>(
-            initialValue:
-                _availableRacks.contains(_selectedRack) ? _selectedRack : null,
-            isExpanded: true,
-            hint: const Text('Pilih lokasi rak'),
-            items: _availableRacks
-                .map(
-                  (rack) => DropdownMenuItem(
-                    value: rack,
-                    child: Text(rack),
-                  ),
-                )
-                .toList(),
-            onChanged:
-                canEdit ? (rack) => setState(() => _selectedRack = rack) : null,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _damageNoteController,
-            enabled: canEdit,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'Catatan kerusakan (opsional)',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: canEdit && !_isSaving ? _savePutaway : null,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-              ),
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 17,
-                      height: 17,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.surface,
-                      ),
-                    )
-                  : const Icon(Icons.save_outlined, size: 18),
-              label: Text(
-                _isSaving ? 'Menyimpan alokasi...' : 'Simpan Alokasi Rak',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _quantityField({
+  Widget _quantityStepper({
     required String label,
     required TextEditingController controller,
     required bool enabled,
-  }) =>
-      TextField(
-        controller: controller,
-        enabled: enabled,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          isDense: true,
+    required VoidCallback onMinus,
+    required VoidCallback onPlus,
+    IconData? prefixIcon,
+    Color? iconColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (prefixIcon != null) ...[
+              Icon(prefixIcon,
+                  size: 14, color: iconColor ?? AppColors.textSecondary),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
         ),
-      );
+        const SizedBox(height: 6),
+        Container(
+          height: 46,
+          decoration: BoxDecoration(
+            color: enabled ? AppColors.surfaceAlt : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.remove_rounded, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 46),
+                color: AppColors.textSecondary,
+                onPressed: enabled ? onMinus : null,
+              ),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  enabled: enabled,
+                  textAlign: TextAlign.center,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'RobotoMono',
+                    color: AppColors.textPrimary,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_rounded, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 46),
+                color: AppColors.primary,
+                onPressed: enabled ? onPlus : null,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _statusBadge(InboundStatus status) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

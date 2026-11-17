@@ -3,8 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/auth/auth_provider.dart';
+import '../../../core/api/api_client.dart';
+import '../../../core/api/api_exception.dart';
+import '../../../core/offline/offline_db.dart';
+import '../../../core/offline/offline_identity.dart';
+import '../../../core/offline/sync_manager.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/omni_snackbar.dart';
+import '../inbound_local_id.dart';
 import '../inbound_model.dart';
 import '../inbound_repository.dart';
 
@@ -19,11 +25,14 @@ class CreateManifestModal extends ConsumerStatefulWidget {
 class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
   bool _isLoadingOptions = true;
   bool _isSubmitting = false;
+  bool _usingCachedOptions = false;
 
   List<InboundSupplier> _suppliers = const [];
   List<InboundProductMaster> _products = const [];
+  List<String> _availableRacks = const [];
   InboundSupplier? _selectedSupplier;
   final List<_ManifestItemDraft> _items = [];
+  final String _localUuid = generateInboundLocalId();
 
   @override
   void initState() {
@@ -35,6 +44,9 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
   void dispose() {
     for (final item in _items) {
       item.quantityController.dispose();
+      item.goodQtyController.dispose();
+      item.damagedQtyController.dispose();
+      item.damageNoteController.dispose();
     }
     super.dispose();
   }
@@ -42,29 +54,109 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
   Future<void> _fetchMasterData() async {
     final authState = ref.read(authProvider);
     final slug = authState.tenantSlug ?? authState.tenantName ?? 'demo-tenant';
+    final ownerKey = offlineOwnerKey(
+      userId: authState.userId,
+      token: authState.token ?? 'unauthenticated',
+    );
 
     try {
-      final options = await ref
-          .read(inboundDataSourceProvider)
-          .getMasterOptions(slug);
+      final options =
+          await ref.read(inboundDataSourceProvider).getMasterOptions(slug);
+      try {
+        await OfflineDb.cacheInboundOptions(
+          tenantSlug: slug,
+          ownerKey: ownerKey,
+          options: {
+            'suppliers': options.suppliers
+                .map((supplier) => {
+                      'id': supplier.id,
+                      'code': supplier.code,
+                      'name': supplier.name,
+                    })
+                .toList(),
+            'products': options.products
+                .map((product) => {
+                      'id': product.productId,
+                      'sku_id': product.id,
+                      'sku': product.sku,
+                      'barcode': product.barcode,
+                      'name': product.name,
+                      'unit': product.unit,
+                      'available_stock': product.availableStock,
+                    })
+                .toList(),
+            'available_racks': options.availableRacks,
+          },
+        );
+      } catch (error) {
+        if (mounted) {
+          OmniSnackbar.show(
+            context,
+            message:
+                'Master data online tersedia, tetapi cache lokal gagal: $error',
+            icon: Icons.warning_amber_rounded,
+          );
+        }
+      }
       if (!mounted) return;
       setState(() {
         _suppliers = options.suppliers;
         _products = options.products;
+        _availableRacks = options.availableRacks;
         _isLoadingOptions = false;
         if (_products.isNotEmpty) {
           _items.add(_ManifestItemDraft(_products.first));
         }
       });
+    } on NetworkException {
+      try {
+        final cached = await OfflineDb.getCachedInboundOptions(
+          tenantSlug: slug,
+          ownerKey: ownerKey,
+        );
+        if (!mounted) return;
+        if (cached == null) {
+          _showOptionsError('Master data belum pernah dimuat saat online.');
+          return;
+        }
+        final suppliers = (cached['suppliers'] as List? ?? const [])
+            .map((item) => InboundSupplier.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
+            .toList();
+        final products = (cached['products'] as List? ?? const [])
+            .map((item) => InboundProductMaster.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
+            .toList();
+        setState(() {
+          _suppliers = suppliers;
+          _products = products;
+          _availableRacks = (cached['available_racks'] as List? ?? const [])
+              .map((item) => item.toString())
+              .toList();
+          _usingCachedOptions = true;
+          _isLoadingOptions = false;
+          if (_products.isNotEmpty) {
+            _items.add(_ManifestItemDraft(_products.first));
+          }
+        });
+      } catch (error) {
+        _showOptionsError('Gagal membaca master data lokal: $error');
+      }
     } catch (error) {
-      if (!mounted) return;
-      OmniSnackbar.show(
-        context,
-        message: error.toString(),
-        icon: Icons.error_outline_rounded,
-      );
-      Navigator.pop(context);
+      _showOptionsError(error.toString());
     }
+  }
+
+  void _showOptionsError(String message) {
+    if (!mounted) return;
+    OmniSnackbar.show(
+      context,
+      message: message,
+      icon: Icons.error_outline_rounded,
+    );
+    Navigator.pop(context);
   }
 
   void _addItemRow() {
@@ -76,6 +168,9 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
     if (_items.length <= 1) return;
     final removed = _items.removeAt(index);
     removed.quantityController.dispose();
+    removed.goodQtyController.dispose();
+    removed.damagedQtyController.dispose();
+    removed.damageNoteController.dispose();
     setState(() {});
   }
 
@@ -97,13 +192,27 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
       return;
     }
 
-    final payloadItems = <Map<String, int>>[];
+    final offlineItems = <Map<String, dynamic>>[];
+    final metadataItems = <Map<String, dynamic>>[];
     for (final item in _items) {
       final quantity = int.tryParse(item.quantityController.text.trim());
+      final goodQty = int.tryParse(item.goodQtyController.text.trim());
+      final damagedQty = int.tryParse(item.damagedQtyController.text.trim());
       if (quantity == null || quantity < 1) {
         OmniSnackbar.show(
           context,
           message: 'Jumlah setiap barang harus minimal 1.',
+          icon: Icons.error_outline_rounded,
+        );
+        return;
+      }
+      if (goodQty == null ||
+          damagedQty == null ||
+          goodQty < 0 ||
+          damagedQty < 0) {
+        OmniSnackbar.show(
+          context,
+          message: 'Jumlah baik dan rusak harus berupa angka nol atau lebih.',
           icon: Icons.error_outline_rounded,
         );
         return;
@@ -116,28 +225,66 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
         );
         return;
       }
-      payloadItems.add({
+      final targetRack = item.targetRack;
+      final damageNote = item.damageNoteController.text.trim();
+      offlineItems.add({
         'sku_id': item.product.id,
-        'product_id': item.product.productId,
-        'expected_qty': quantity,
         'po_qty': quantity,
+        'good_qty': goodQty,
+        'damaged_qty': damagedQty,
+        'target_rack': targetRack,
+        'damage_note': damageNote.isEmpty ? null : damageNote,
+      });
+      metadataItems.add({
+        ...offlineItems.last,
+        'sku': item.product.sku,
+        'barcode': item.product.barcode,
+        'name': item.product.name,
       });
     }
 
     setState(() => _isSubmitting = true);
     try {
-      await ref
-          .read(inboundRepositoryProvider.notifier)
-          .createManifest(
-            supplierId: _selectedSupplier!.id,
-            items: payloadItems,
-          );
+      final authState = ref.read(authProvider);
+      final tenantSlug =
+          authState.tenantSlug ?? authState.tenantName ?? 'demo-tenant';
+      final ownerKey = offlineOwnerKey(
+        userId: authState.userId,
+        token: authState.token ?? 'unauthenticated',
+      );
+      await ref.read(inboundRepositoryProvider.notifier).queueOfflineManifest(
+        localUuid: _localUuid,
+        offlinePayload: {
+          'local_uuid': _localUuid,
+          'supplier_id': _selectedSupplier!.id,
+          'should_commit': false,
+          'items': offlineItems,
+        },
+        metadata: {
+          'supplier_id': _selectedSupplier!.id,
+          'supplier_name': _selectedSupplier!.name,
+          'items': metadataItems,
+        },
+      );
+      final result = await SyncManager.instance.syncInboundQueue(
+        dio: ref.read(dioProvider),
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+        authToken: authState.token ?? '',
+        localUuid: _localUuid,
+      );
+      await ref.read(inboundRepositoryProvider.notifier).loadManifests();
+      final synced = result.syncedCount == 1 && result.failures.isEmpty;
       if (!mounted) return;
       Navigator.pop(context);
       OmniSnackbar.show(
         context,
-        message: 'Manifes PO inbound berhasil dibuat.',
-        icon: Icons.check_circle_rounded,
+        message: synced
+            ? 'Manifes PO inbound berhasil dibuat.'
+            : result.failures.isEmpty
+                ? 'Manifes inbound disimpan lokal dan menunggu sinkronisasi.'
+                : 'Tersimpan lokal, tetapi sync gagal: ${result.failures.first.message}',
+        icon: synced ? Icons.check_circle_rounded : Icons.cloud_off_rounded,
       );
     } catch (error) {
       if (mounted) {
@@ -223,14 +370,30 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                       ),
                       IconButton(
                         tooltip: 'Tutup',
-                        onPressed: _isSubmitting
-                            ? null
-                            : () => Navigator.pop(context),
+                        onPressed:
+                            _isSubmitting ? null : () => Navigator.pop(context),
                         icon: const Icon(Icons.close_rounded),
                       ),
                     ],
                   ),
                   const SizedBox(height: 18),
+                  if (_usingCachedOptions)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'Offline: master data tersimpan di perangkat. Isi jumlah diterima agar transaksi siap disinkronkan.',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
                   Flexible(
                     child: SingleChildScrollView(
                       child: Column(
@@ -246,7 +409,8 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                 .map(
                                   (
                                     supplier,
-                                  ) => DropdownMenuItem<InboundSupplier>(
+                                  ) =>
+                                      DropdownMenuItem<InboundSupplier>(
                                     value: supplier,
                                     child: Text(
                                       supplier.code.isNotEmpty &&
@@ -263,7 +427,7 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                             onChanged: _isSubmitting
                                 ? null
                                 : (value) =>
-                                      setState(() => _selectedSupplier = value),
+                                    setState(() => _selectedSupplier = value),
                             decoration: _inputDecoration(),
                           ),
                           const SizedBox(height: 16),
@@ -306,8 +470,8 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                     TextButton.icon(
                                       onPressed:
                                           _isSubmitting || _products.isEmpty
-                                          ? null
-                                          : _addItemRow,
+                                              ? null
+                                              : _addItemRow,
                                       icon: const Icon(Icons.add, size: 17),
                                       label: const Text('Tambah'),
                                     ),
@@ -346,48 +510,44 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             DropdownButtonFormField<
-                                              InboundProductMaster
-                                            >(
+                                                InboundProductMaster>(
                                               initialValue: item.product,
                                               isExpanded: true,
                                               items: _products
                                                   .map(
-                                                    (product) =>
-                                                        DropdownMenuItem<
-                                                          InboundProductMaster
-                                                        >(
-                                                          value: product,
-                                                          child: Column(
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              Text(
-                                                                product.sku,
-                                                                softWrap: true,
-                                                                style: const TextStyle(
-                                                                  fontSize: 12,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                ),
-                                                              ),
-                                                              Text(
-                                                                product.name,
-                                                                softWrap: true,
-                                                                maxLines: 2,
-                                                                style:
-                                                                    const TextStyle(
-                                                                      fontSize:
-                                                                          11,
-                                                                    ),
-                                                              ),
-                                                            ],
+                                                    (product) => DropdownMenuItem<
+                                                        InboundProductMaster>(
+                                                      value: product,
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Text(
+                                                            product.sku,
+                                                            softWrap: true,
+                                                            style:
+                                                                const TextStyle(
+                                                              fontSize: 12,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
                                                           ),
-                                                        ),
+                                                          Text(
+                                                            product.name,
+                                                            softWrap: true,
+                                                            maxLines: 2,
+                                                            style:
+                                                                const TextStyle(
+                                                              fontSize: 11,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
                                                   )
                                                   .toList(),
                                               selectedItemBuilder: (context) =>
@@ -404,8 +564,8 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                                                     .ellipsis,
                                                             style:
                                                                 const TextStyle(
-                                                                  fontSize: 12,
-                                                                ),
+                                                              fontSize: 12,
+                                                            ),
                                                           ),
                                                         ),
                                                       )
@@ -424,6 +584,8 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                                 hint: 'Pilih produk',
                                               ),
                                             ),
+                                            const SizedBox(height: 8),
+                                            _buildProductDetails(item.product),
                                             const SizedBox(height: 8),
                                             Column(
                                               crossAxisAlignment:
@@ -456,20 +618,19 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                                             TextAlign.center,
                                                         decoration:
                                                             _inputDecoration(
-                                                              hint: 'Qty',
-                                                            ),
+                                                          hint: 'Qty',
+                                                        ),
                                                       ),
                                                     ),
                                                     IconButton(
                                                       tooltip: 'Hapus item',
-                                                      onPressed:
-                                                          _isSubmitting ||
+                                                      onPressed: _isSubmitting ||
                                                               _items.length == 1
                                                           ? null
                                                           : () =>
-                                                                _removeItemRow(
-                                                                  index,
-                                                                ),
+                                                              _removeItemRow(
+                                                                index,
+                                                              ),
                                                       icon: const Icon(
                                                         Icons
                                                             .delete_outline_rounded,
@@ -477,6 +638,68 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                                                       ),
                                                     ),
                                                   ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child:
+                                                          _buildQuantityField(
+                                                        'Qty baik',
+                                                        item.goodQtyController,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child:
+                                                          _buildQuantityField(
+                                                        'Qty rusak',
+                                                        item.damagedQtyController,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                DropdownButtonFormField<String>(
+                                                  initialValue:
+                                                      _availableRacks.contains(
+                                                    item.targetRack,
+                                                  )
+                                                          ? item.targetRack
+                                                          : null,
+                                                  isExpanded: true,
+                                                  decoration: _inputDecoration(
+                                                    hint:
+                                                        'Rak tujuan (opsional)',
+                                                  ),
+                                                  items: _availableRacks
+                                                      .map(
+                                                        (rack) =>
+                                                            DropdownMenuItem<
+                                                                String>(
+                                                          value: rack,
+                                                          child: Text(rack),
+                                                        ),
+                                                      )
+                                                      .toList(),
+                                                  onChanged: _isSubmitting
+                                                      ? null
+                                                      : (rack) => setState(
+                                                            () =>
+                                                                item.targetRack =
+                                                                    rack,
+                                                          ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                TextField(
+                                                  controller:
+                                                      item.damageNoteController,
+                                                  enabled: !_isSubmitting,
+                                                  maxLength: 500,
+                                                  decoration: _inputDecoration(
+                                                    hint:
+                                                        'Catatan barang rusak',
+                                                  ),
                                                 ),
                                               ],
                                             ),
@@ -511,8 +734,7 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
                       Expanded(
                         flex: 2,
                         child: ElevatedButton.icon(
-                          onPressed:
-                              _isSubmitting ||
+                          onPressed: _isSubmitting ||
                                   _suppliers.isEmpty ||
                                   _products.isEmpty
                               ? null
@@ -545,29 +767,83 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
     );
   }
 
+  Widget _buildProductDetails(InboundProductMaster product) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(9),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              product.name,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'SKU: ${product.sku} · Barcode: ${product.barcode.isEmpty ? '-' : product.barcode}',
+              style:
+                  const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            ),
+            Text(
+              'Satuan: ${product.unit}'
+              '${product.availableStock == null ? '' : ' · Stok saat ini: ${product.availableStock} ${product.unit}'}',
+              style:
+                  const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      );
+
+  Widget _buildQuantityField(
+    String label,
+    TextEditingController controller,
+  ) =>
+      TextField(
+        controller: controller,
+        enabled: !_isSubmitting,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: _inputDecoration(hint: label),
+      );
+
   InputDecoration _inputDecoration({String? hint}) => InputDecoration(
-    hintText: hint,
-    isDense: true,
-    filled: true,
-    fillColor: AppColors.surface,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 12),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.border),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.border),
-    ),
-  );
+        hintText: hint,
+        isDense: true,
+        filled: true,
+        fillColor: AppColors.surface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 11, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+      );
 }
 
 class _ManifestItemDraft {
   _ManifestItemDraft(this.product)
-    : quantityController = TextEditingController(text: '10');
+      : quantityController = TextEditingController(text: '10'),
+        goodQtyController = TextEditingController(text: '0'),
+        damagedQtyController = TextEditingController(text: '0'),
+        damageNoteController = TextEditingController();
 
   InboundProductMaster product;
   final TextEditingController quantityController;
+  final TextEditingController goodQtyController;
+  final TextEditingController damagedQtyController;
+  final TextEditingController damageNoteController;
+  String? targetRack;
 }
 
 class _FieldLabel extends StatelessWidget {
@@ -577,11 +853,11 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-    label,
-    style: const TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-      color: AppColors.textPrimary,
-    ),
-  );
+        label,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+      );
 }

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/offline/offline_db.dart';
+import '../../core/offline/offline_identity.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'transfer_transaction_model.dart';
@@ -158,27 +160,49 @@ class _TransferTransactionFormScreenState
         return item;
       }).toList();
       final repository = ref.read(transferTransactionRepositoryProvider);
+      String? savedCode;
       if (_isEditing) {
+        savedCode = widget.transaction!.code;
         await repository.updateTransaction(
           slug,
-          widget.transaction!.code,
+          savedCode,
           items: items,
           notes: _notesController.text.trim(),
         );
       } else {
-        await repository.createTransaction(
+        savedCode = await repository.createTransaction(
           slug,
           items: items,
           notes: _notesController.text.trim(),
         );
       }
       if (!mounted) return;
+      final auth = ref.read(authProvider);
+      final localRow = savedCode == null
+          ? null
+          : await OfflineDb.getTransferQueueItem(
+              localUuid: savedCode,
+              tenantSlug: slug,
+              ownerKey: offlineOwnerKey(
+                userId: auth.userId,
+                token: auth.token ?? '',
+              ),
+            );
+      if (!mounted) return;
+      final isWaitingForSync = localRow != null &&
+          (localRow['status'] == 'pending' ||
+              localRow['status'] == 'error' ||
+              localRow['status'] == 'syncing');
       OmniSnackbar.show(
         context,
-        message: _isEditing
-            ? 'Draft mutasi berhasil diperbarui.'
-            : 'Transaksi mutasi stok berhasil dibuat.',
-        icon: Icons.check_circle_rounded,
+        message: isWaitingForSync
+            ? 'Mutasi ${savedCode ?? ''} disimpan lokal dan menunggu sinkronisasi.'
+            : _isEditing
+                ? 'Draft mutasi berhasil diperbarui.'
+                : 'Transaksi mutasi stok berhasil dibuat.',
+        icon: isWaitingForSync
+            ? Icons.cloud_upload_outlined
+            : Icons.check_circle_rounded,
       );
       context.pop(true);
     } catch (error) {
@@ -447,13 +471,42 @@ class _TransferTransactionFormScreenState
           ),
           const SizedBox(height: 7),
           _buildSkuDropdown(row, options.skus),
-          if (selectedSku?.availableStock != null) ...[
+          if (selectedSku != null) ...[
             const SizedBox(height: 5),
-            Text(
-              'Stok tersedia: ${selectedSku!.availableStock} ${selectedSku.unit}',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 11,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${selectedSku.name} · SKU ${selectedSku.code}',
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    'Barcode: ${selectedSku.barcode.isEmpty ? '-' : selectedSku.barcode}',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 10,
+                    ),
+                  ),
+                  if (selectedSku.availableStock != null)
+                    Text(
+                      'Total stok tersedia: ${selectedSku.availableStock} ${selectedSku.unit}',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 10,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
@@ -543,37 +596,55 @@ class _TransferTransactionFormScreenState
     required List<TransferLocation> locations,
   }) {
     final value = isOrigin ? row.fromLocationId : row.toLocationId;
-    return DropdownButtonFormField<int>(
-      initialValue: value,
-      isExpanded: true,
-      decoration: _inputDecoration(
-        isOrigin ? 'Rak asal (Origin)' : 'Rak tujuan (Destination)',
-        isOrigin ? Icons.output_rounded : Icons.input_rounded,
-      ),
-      items: locations
-          .map(
-            (location) => DropdownMenuItem<int>(
-              value: location.id,
-              child: Text(
-                location.warehouseName == null
-                    ? location.name
-                    : '${location.name} · ${location.warehouseName}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    final selectedLocation =
+        locations.where((location) => location.id == value).firstOrNull;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<int>(
+          initialValue: value,
+          isExpanded: true,
+          decoration: _inputDecoration(
+            isOrigin ? 'Rak asal (Origin)' : 'Rak tujuan (Destination)',
+            isOrigin ? Icons.output_rounded : Icons.input_rounded,
+          ),
+          items: locations
+              .map(
+                (location) => DropdownMenuItem<int>(
+                  value: location.id,
+                  child: Text(
+                    location.warehouseName == null
+                        ? location.name
+                        : '${location.name} · ${location.warehouseName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: locations.isEmpty
+              ? null
+              : (value) => setState(() {
+                    if (isOrigin) {
+                      row.fromLocationId = value;
+                    } else {
+                      row.toLocationId = value;
+                    }
+                  }),
+          validator: (value) => value == null ? 'Pilih lokasi' : null,
+        ),
+        if (selectedLocation?.stockQuantity != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 3),
+            child: Text(
+              'Stok saat ini di rak: ${selectedLocation!.stockQuantity}',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 10,
               ),
             ),
-          )
-          .toList(),
-      onChanged: locations.isEmpty
-          ? null
-          : (value) => setState(() {
-                if (isOrigin) {
-                  row.fromLocationId = value;
-                } else {
-                  row.toLocationId = value;
-                }
-              }),
-      validator: (value) => value == null ? 'Pilih lokasi' : null,
+          ),
+      ],
     );
   }
 

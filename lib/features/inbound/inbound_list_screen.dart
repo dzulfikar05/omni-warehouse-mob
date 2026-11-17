@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/api/api_exception.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'inbound_model.dart';
@@ -32,7 +33,13 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
 
   Future<void> _loadManifests() async {
     try {
-      await ref.read(inboundRepositoryProvider.notifier).loadManifests();
+      final notifier = ref.read(inboundRepositoryProvider.notifier);
+      await notifier.loadManifests();
+      try {
+        await notifier.cacheMasterOptions();
+      } on NetworkException {
+        // The last successful master-data snapshot remains available offline.
+      }
     } catch (error) {
       if (mounted) {
         OmniSnackbar.show(
@@ -67,8 +74,7 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
     final stats = ref.watch(inboundStatsProvider);
 
     final filteredManifests = manifests.where((m) {
-      final matchesSearch =
-          _searchQuery.isEmpty ||
+      final matchesSearch = _searchQuery.isEmpty ||
           m.code.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           m.supplierName.toLowerCase().contains(_searchQuery.toLowerCase());
 
@@ -336,7 +342,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              _buildStatusBadge(manifest.status),
+              _buildStatusBadge(
+                manifest.status,
+                label: manifest.isOfflinePending ? 'PENDING SYNC' : null,
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -377,15 +386,31 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
             ],
           ),
           const SizedBox(height: 10),
+          if (manifest.isOfflinePending && manifest.syncError != null) ...[
+            Text(
+              'Sync tertunda: ${manifest.syncError}',
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.danger,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => context.go('/inbound/${manifest.code}'),
+              onPressed: () => context.go(
+                '/inbound/${manifest.isOfflinePending ? 'LOCAL-${manifest.localUuid}' : manifest.code}',
+              ),
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size.fromHeight(50),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              child: const Text('Buka Manifes'),
+              child: Text(
+                manifest.isOfflinePending
+                    ? 'Lanjutkan Receiving'
+                    : 'Buka Manifes',
+              ),
             ),
           ),
         ],
@@ -393,19 +418,19 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
     );
   }
 
-  Widget _buildStatusBadge(InboundStatus status) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color: status.bg,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text(
-      status.label,
-      style: TextStyle(
-        color: status.color,
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
-  );
+  Widget _buildStatusBadge(InboundStatus status, {String? label}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: status.bg,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label ?? status.label,
+          style: TextStyle(
+            color: status.color,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
 }

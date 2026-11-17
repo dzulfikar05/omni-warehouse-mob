@@ -45,7 +45,7 @@ State Management: Riverpod (flutter_riverpod + riverpod_annotation)
 Navigation: go_router
 HTTP Client: Dio + dio_smart_retry
 Auth Storage: flutter_secure_storage
-Offline DB: Isar (atau Hive jika lebih sederhana)
+Offline DB: SQLite (sqflite mobile, sqflite_common_ffi desktop)
 Barcode Scanner: mobile_scanner
 Camera: camera (untuk foto bukti jika diperlukan)
 Push Notif: firebase_messaging (opsional, fase 2)
@@ -54,7 +54,7 @@ UI: Material 3 dengan override design system custom (bukan default Material)
 Linting: very_good_analysis atau flutter_lints
 ```
 
-> **Prinsip Stack**: Tidak over-engineered. Tidak perlu BLoC yang verbose. Riverpod sudah cukup clean dan testable. Isar lebih performant dari Hive untuk query offline.
+> **Prinsip Stack**: Tidak over-engineered. Tidak perlu BLoC yang verbose. Riverpod sudah cukup clean dan testable. SQLite menyimpan antrean inbound dan cache master data per tenant/pengguna.
 
 ---
 
@@ -74,9 +74,9 @@ lib/
 │   │   ├── auth_provider.dart       ← Riverpod auth notifier
 │   │   └── secure_storage.dart      ← Token & tenant storage wrapper
 │   ├── offline/
-│   │   ├── offline_db.dart          ← Isar database init
+│   │   ├── offline_db.dart          ← SQLite init, master cache, dan antrean inbound
 │   │   ├── sync_manager.dart        ← Queue & sync logic
-│   │   └── models/                  ← Isar schema models (offline queue items)
+│   │   └── offline_identity.dart   ← Scope antrean ke tenant/pengguna
 │   ├── router/
 │   │   └── app_router.dart          ← go_router config, guards, routes
 │   └── theme/
@@ -106,7 +106,7 @@ lib/
 │   │   │   └── inbound_repository.dart
 │   │   ├── domain/
 │   │   │   ├── inbound_model.dart   ← Manifest, InboundItem
-│   │   │   └── inbound_offline.dart ← Isar model untuk offline queue
+│   │   │   └── inbound_offline.dart ← Model transaksi inbound offline
 │   │   └── presentation/
 │   │       ├── inbound_list_screen.dart
 │   │       ├── inbound_form_screen.dart
@@ -592,13 +592,16 @@ class ReconciliationItem {
 - Banner status: Online ✓ / Offline ✗
 - Card summary: "X Berkas menunggu sync"
 - Button besar: "Sync Sekarang" (disabled jika offline)
-- List pending items: nama transaksi + timestamp + jumlah data + status (pending/syncing/done/error)
+- List inbound pending: nama transaksi + timestamp + jumlah data + status (pending/syncing/done/error)
 - Link: "Hapus Log Sukses" (hapus log yang sudah berhasil)
 
 **Offline Queue Logic:**
-- Setiap aksi (putaway inbound, packing outbound, opname count) yang dilakukan saat offline → masuk Isar queue dengan status `PENDING`
-- Saat online (deteksi connectivity) → SyncManager otomatis coba sync background
-- Jika gagal → status `ERROR` + error message tersimpan
+- Pembuatan manifes dan input hitung/putaway inbound disimpan terlebih dahulu ke SQLite dengan ID lokal `TX-INB-XXXXXXXX` yang tetap. Nilai ini dikirim pada field backend `local_uuid` agar retry idempoten.
+- Master supplier, SKU, dan rak di-cache secara terpisah untuk tenant dan pengguna aktif; antrean pengguna lain tidak ditampilkan atau dikirim.
+- Tombol Sync dan deteksi koneksi pulih mengirim payload ke `/{tenant_slug}/inbound/sync-offline`.
+- Jika gagal → status `ERROR` dan pesan tersimpan; retry memakai ID lokal yang sama.
+- Agar retry tidak membuat manifes duplikat, backend wajib memproses `local_uuid` secara idempoten dan menegakkan keunikan setidaknya pada scope tenant.
+- Queue offline untuk outbound, opname, dan transfer masih memerlukan integrasi endpoint masing-masing.
 
 ---
 
@@ -813,7 +816,8 @@ Setelah splash → check token di secure storage:
 - [ ] Buat semua Mock Repositories
 - [ ] Build semua screen dengan mock data
 - [ ] Implement scanner overlay (reusable)
-- [ ] Implement offline Isar + SyncManager
+- [x] Implement SQLite queue/cache inbound + SyncManager manual/otomatis
+- [ ] Integrasikan offline sync outbound, opname, dan transfer
 - [ ] Native splash screen
 - [ ] Pastikan bisa build di Android (iOS opsional)
 

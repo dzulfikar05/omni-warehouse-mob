@@ -95,6 +95,8 @@ class OutboundProductMaster {
     required this.barcode,
     required this.name,
     this.productId = 0,
+    this.availableStock,
+    this.unit = 'Pcs',
   });
 
   final int skuId;
@@ -102,6 +104,8 @@ class OutboundProductMaster {
   final String sku;
   final String barcode;
   final String name;
+  final int? availableStock;
+  final String unit;
 
   factory OutboundProductMaster.fromJson(Map<String, dynamic> json) {
     final product = json['product'] is Map
@@ -114,22 +118,45 @@ class OutboundProductMaster {
       barcode: (json['barcode'] ?? product['barcode'] ?? '').toString(),
       name: (json['name'] ?? json['product_name'] ?? product['name'] ?? '')
           .toString(),
+      availableStock: _asNullableInt(
+        json['available_stock'] ??
+            json['available_quantity'] ??
+            json['stock_qty'] ??
+            json['quantity'],
+      ),
+      unit: (json['unit'] ?? json['unit_name'] ?? 'Pcs').toString(),
     );
   }
 }
 
 class OutboundLocation {
-  const OutboundLocation({required this.id, required this.rackCode, this.zone});
+  const OutboundLocation({
+    required this.id,
+    required this.rackCode,
+    this.zone,
+    this.stockQuantity,
+  });
 
   final int id;
   final String rackCode;
   final String? zone;
+  final int? stockQuantity;
 
   factory OutboundLocation.fromJson(Map<String, dynamic> json) =>
       OutboundLocation(
         id: _asInt(json['id']),
         rackCode: (json['rack_code'] ?? json['code'] ?? '').toString(),
         zone: json['zone']?.toString(),
+        stockQuantity: _asNullableInt(
+          json['stock_quantity'] ??
+              json['stock_qty'] ??
+              json['current_qty'] ??
+              json['stock'] ??
+              json['available_quantity'] ??
+              json['available_stock'] ??
+              json['quantity'] ??
+              json['qty'],
+        ),
       );
 }
 
@@ -208,7 +235,12 @@ class OutboundItem {
                   locationMap['rack_code'] ??
                   '')
               .toString(),
-      orderQty: _asInt(json['so_qty'] ?? json['order_qty'] ?? json['quantity'] ?? json['po_qty']),
+      orderQty: _asInt(
+        json['so_qty'] ??
+            json['order_qty'] ??
+            json['quantity'] ??
+            json['po_qty'],
+      ),
       skuId: _asInt(json['sku_id'] ?? skuMap['id']),
       pickedQty: _asInt(json['good_qty'] ?? json['picked_qty']),
       damagedQty: _asInt(json['damaged_qty']),
@@ -274,6 +306,9 @@ class OutboundOrder {
     this.startedAt,
     this.dispatchedAt,
     this.trackingNumber,
+    this.isOfflinePending = false,
+    this.localId,
+    this.syncError,
   });
 
   final String code;
@@ -293,6 +328,9 @@ class OutboundOrder {
   final String? startedAt;
   final String? dispatchedAt;
   final String? trackingNumber;
+  final bool isOfflinePending;
+  final String? localId;
+  final String? syncError;
 
   int get totalOrderUnits =>
       totalUnits ?? items.fold(0, (sum, it) => sum + it.orderQty);
@@ -332,6 +370,9 @@ class OutboundOrder {
     startedAt: startedAt,
     dispatchedAt: dispatchedAt ?? this.dispatchedAt,
     trackingNumber: trackingNumber,
+    isOfflinePending: isOfflinePending,
+    localId: localId,
+    syncError: syncError,
   );
 
   factory OutboundOrder.fromJson(Map<String, dynamic> json) {
@@ -361,9 +402,17 @@ class OutboundOrder {
       vehicleNo: json['vehicle_no']?.toString(),
       driverName: json['driver_name']?.toString(),
       notes: json['notes']?.toString(),
-      totalUnits: (json['total_units'] ?? json['total_so_units'] ?? json['total_po_units']) == null
+      totalUnits:
+          (json['total_units'] ??
+                  json['total_so_units'] ??
+                  json['total_po_units']) ==
+              null
           ? null
-          : _asInt(json['total_units'] ?? json['total_so_units'] ?? json['total_po_units']),
+          : _asInt(
+              json['total_units'] ??
+                  json['total_so_units'] ??
+                  json['total_po_units'],
+            ),
       totalSkus: json['total_skus'] == null && json['total_sku'] == null
           ? null
           : _asInt(json['total_skus'] ?? json['total_sku']),
@@ -458,3 +507,6 @@ class OutboundStats {
 }
 
 int _asInt(dynamic value) => int.tryParse(value?.toString() ?? '') ?? 0;
+
+int? _asNullableInt(dynamic value) =>
+    value == null ? null : int.tryParse(value.toString());

@@ -358,6 +358,23 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
             color: AppColors.textPrimary,
           ),
         ),
+        if (order.isOfflinePending) ...[
+          const SizedBox(height: 4),
+          Text(
+            order.syncError == null
+                ? 'ID lokal · Menunggu sync'
+                : 'Sync gagal: ${order.syncError}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: order.syncError == null
+                  ? AppColors.warning
+                  : AppColors.danger,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         Row(
           children: [

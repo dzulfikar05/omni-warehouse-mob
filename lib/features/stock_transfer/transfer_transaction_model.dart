@@ -29,12 +29,14 @@ class TransferLocation {
     required this.name,
     this.warehouseId,
     this.warehouseName,
+    this.stockQuantity,
   });
 
   final int id;
   final String name;
   final int? warehouseId;
   final String? warehouseName;
+  final int? stockQuantity;
 
   factory TransferLocation.fromJson(Map<String, dynamic> json) {
     final warehouse = _asMap(json['warehouse']);
@@ -50,6 +52,16 @@ class TransferLocation {
         json['warehouse_id'] ?? warehouse?['id'],
       ),
       warehouseName: (json['warehouse_name'] ?? warehouse?['name'])?.toString(),
+      stockQuantity: _asNullableInt(
+        json['stock_quantity'] ??
+            json['stock_qty'] ??
+            json['current_qty'] ??
+            json['stock'] ??
+            json['available_quantity'] ??
+            json['available_stock'] ??
+            json['quantity'] ??
+            json['qty'],
+      ),
     );
   }
 }
@@ -178,6 +190,8 @@ class TransferTransaction {
     this.notes,
     this.itemCount,
     this.totalQuantity,
+    this.isOfflinePending = false,
+    this.syncError,
   });
 
   final String code;
@@ -188,6 +202,8 @@ class TransferTransaction {
   final String? notes;
   final int? itemCount;
   final int? totalQuantity;
+  final bool isOfflinePending;
+  final String? syncError;
 
   int get totalItems => itemCount ?? items.length;
   int get units =>
@@ -195,7 +211,9 @@ class TransferTransaction {
   bool get canCancel =>
       status.toLowerCase() != 'cancelled' && status.toLowerCase() != 'canceled';
   bool get isEditable =>
-      status.toLowerCase() == 'draft' || status.toLowerCase() == 'pending';
+      status.toLowerCase() == 'draft' ||
+      status.toLowerCase() == 'pending' ||
+      (isOfflinePending && status.toLowerCase() == 'error');
 
   factory TransferTransaction.fromJson(Map<String, dynamic> json) {
     final rawItems = json['items'] ?? json['details'] ?? json['lines'];
@@ -232,6 +250,8 @@ class TransferTransaction {
       totalQuantity: _asNullableInt(
         json['total_quantity'] ?? json['total_units'] ?? json['total_qty'],
       ),
+      isOfflinePending: json['is_offline_pending'] == true,
+      syncError: json['sync_error']?.toString(),
     );
   }
 }

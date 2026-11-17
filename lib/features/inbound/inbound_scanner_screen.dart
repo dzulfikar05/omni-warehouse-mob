@@ -29,7 +29,6 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
   InboundManifestDetail? _detail;
   InboundItem? _selectedItem;
   List<String> _availableRacks = const [];
-  String? _selectedRack;
   bool _isLoading = true;
   bool _isScanning = false;
   bool _isCameraScannerOpen = false;
@@ -71,7 +70,9 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
           .where((rack) => rack.isNotEmpty)
           .toList();
       var availableRacks = racks;
-      if (availableRacks.isEmpty && _availableRacks.isEmpty) {
+      if (availableRacks.isEmpty &&
+          _availableRacks.isEmpty &&
+          !detail.manifest.isOfflinePending) {
         final options = await ref
             .read(inboundDataSourceProvider)
             .getMasterOptions(ref.read(inboundTenantSlugProvider));
@@ -105,10 +106,6 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
       _goodQtyController.text = item.goodQty.toString();
       _damagedQtyController.text = item.damagedQty.toString();
       _damageNoteController.text = item.notes ?? '';
-      _selectedRack =
-          item.targetRack != null && _availableRacks.contains(item.targetRack)
-              ? item.targetRack
-              : (_availableRacks.isEmpty ? null : _availableRacks.first);
     });
     _openItemPutawaySheet(item);
   }
@@ -215,7 +212,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
     try {
       await ref.read(inboundRepositoryProvider.notifier).updateItemTally(
             manifestCode: widget.code,
-            itemId: itemId,
+            itemId: item.id,
             goodQty: goodQty,
             damagedQty: damagedQty,
             targetRack: targetRack,
@@ -440,7 +437,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
                       ),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        value: _availableRacks.contains(currentRack)
+                        initialValue: _availableRacks.contains(currentRack)
                             ? currentRack
                             : null,
                         isExpanded: true,
@@ -597,9 +594,9 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
     try {
       final notifier = ref.read(inboundRepositoryProvider.notifier);
       if (manifest.status == InboundStatus.hold) {
-        await notifier.resumeManifest(widget.code);
+        await notifier.resumeManifest(manifest.code);
       } else {
-        await notifier.holdManifest(widget.code, reason: reason);
+        await notifier.holdManifest(manifest.code, reason: reason);
       }
       await _loadDetail(showLoading: false);
       if (mounted) {
@@ -625,6 +622,15 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
   }
 
   Future<void> _commitInbound(InboundManifest manifest) async {
+    if (manifest.isOfflinePending) {
+      OmniSnackbar.show(
+        context,
+        message: 'Sinkronkan manifes terlebih dahulu sebelum commit ke rak.',
+        icon: Icons.cloud_off_rounded,
+      );
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -650,7 +656,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
     try {
       await ref
           .read(inboundRepositoryProvider.notifier)
-          .commitManifestApi(widget.code);
+          .commitManifestApi(manifest.code);
       if (!mounted) return;
       OmniSnackbar.show(
         context,
@@ -838,9 +844,10 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: !canEdit || _isUpdatingStatus
-                    ? null
-                    : () => _changeHoldStatus(manifest),
+                onPressed:
+                    !canEdit || manifest.isOfflinePending || _isUpdatingStatus
+                        ? null
+                        : () => _changeHoldStatus(manifest),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(48, 50),
                   padding: const EdgeInsets.symmetric(
@@ -863,10 +870,13 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
                 label: Text(isHeld ? 'Lanjutkan' : 'Hold Session'),
               ),
               ElevatedButton.icon(
-                onPressed:
-                    !canEdit || isHeld || _isCommitting || _isUpdatingStatus
-                        ? null
-                        : () => _commitInbound(manifest),
+                onPressed: !canEdit ||
+                        manifest.isOfflinePending ||
+                        isHeld ||
+                        _isCommitting ||
+                        _isUpdatingStatus
+                    ? null
+                    : () => _commitInbound(manifest),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(48, 50),
                   padding: const EdgeInsets.symmetric(
@@ -884,7 +894,11 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
                         ),
                       )
                     : const Icon(Icons.done_all_rounded, size: 17),
-                label: const Text('Commit ke Rak'),
+                label: Text(
+                  manifest.isOfflinePending
+                      ? 'Sync sebelum Commit'
+                      : 'Commit ke Rak',
+                ),
               ),
             ],
           ),
@@ -1083,6 +1097,41 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
             ),
           ),
           const Divider(height: 1),
+          if (_detail!.locations.any(
+            (location) => location.stockQuantity != null,
+          ))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Stok per rak',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _detail!.locations
+                        .where((location) => location.stockQuantity != null)
+                        .map(
+                          (location) => Chip(
+                            label: Text(
+                              '${location.rackCode} · ${location.stockQuantity} unit',
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
           if (items.isEmpty)
             const Padding(
               padding: EdgeInsets.all(18),

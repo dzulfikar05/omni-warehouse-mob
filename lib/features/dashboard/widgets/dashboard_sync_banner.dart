@@ -12,14 +12,12 @@ class DashboardSyncBanner extends StatelessWidget {
     required this.isSyncing,
     required this.hasSynced,
     required this.onSync,
-    this.onSimulateOfflineDraft,
   });
 
   final int pendingSyncCount;
   final bool isSyncing;
   final bool hasSynced;
   final VoidCallback onSync;
-  final VoidCallback? onSimulateOfflineDraft;
 
   @override
   Widget build(BuildContext context) {
@@ -85,8 +83,8 @@ class DashboardSyncBanner extends StatelessWidget {
                         Flexible(
                           child: Text(
                             hasPending
-                                ? 'Antrean Isar Offline'
-                                : 'Mesin Offline Isar DB',
+                                ? 'Antrean SQLite Offline'
+                                : 'Mesin Offline SQLite',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -112,9 +110,7 @@ class DashboardSyncBanner extends StatelessWidget {
                             ),
                           ),
                           child: Text(
-                            hasPending
-                                ? '$pendingSyncCount PENDING'
-                                : 'AKTIF',
+                            hasPending ? '$pendingSyncCount PENDING' : 'AKTIF',
                             style: TextStyle(
                               fontSize: 8.5,
                               fontWeight: FontWeight.w800,
@@ -207,31 +203,6 @@ class DashboardSyncBanner extends StatelessWidget {
               ),
             ),
           ),
-
-          // 4. Quick Demo Simulation Button (optional)
-          if (onSimulateOfflineDraft != null) ...[
-            const Gap(6),
-            InkWell(
-              onTap: onSimulateOfflineDraft,
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                height: 40,
-                width: 32,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Center(
-                  child: Icon(
-                    LucideIcons.plus,
-                    size: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );

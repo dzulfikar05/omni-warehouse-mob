@@ -9,6 +9,64 @@ import 'package:omni_warehouse_mob/features/stock_transfer/transfer_transaction_
 import 'package:omni_warehouse_mob/features/stock_transfer/transfer_transaction_repository.dart';
 
 void main() {
+  testWidgets('shows selected SKU and rack stock details in the form', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authProvider.overrideWith((ref) => _TestAuthNotifier()),
+          transferTransactionRepositoryProvider.overrideWithValue(
+            _FakeTransferRepository(
+              Future.value(
+                const TransferMasterOptions(
+                  warehouses: [],
+                  locations: [
+                    TransferLocation(
+                      id: 8,
+                      name: 'RACK-A1',
+                      warehouseName: 'Gudang Utama',
+                      stockQuantity: 12,
+                    ),
+                    TransferLocation(id: 9, name: 'RACK-B1'),
+                  ],
+                  skus: [
+                    TransferSku(
+                      id: 5,
+                      code: 'SKU-5',
+                      name: 'Produk Lima',
+                      barcode: '001005',
+                      availableStock: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: TransferTransactionFormScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Pilih SKU / produk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Produk Lima (SKU-5)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Barcode: 001005'), findsOneWidget);
+    expect(find.text('Total stok tersedia: 20 pcs'), findsOneWidget);
+
+    await tester.tap(find.text('Rak asal (Origin)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('RACK-A1 · Gudang Utama'));
+    await tester.pumpAndSettle();
+    expect(find.text('Stok saat ini di rak: 12'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('shows the transaction form while master options are loading', (
     tester,
   ) async {
@@ -65,16 +123,14 @@ class _FakeTransferRepository implements TransferTransactionRepository {
   Future<TransferTransactionListResult> getTransactions(
     String slug, {
     Map<String, dynamic> filters = const {},
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<String?> createTransaction(
     String slug, {
     required List<Map<String, dynamic>> items,
     String? notes,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<void> updateTransaction(
@@ -82,8 +138,7 @@ class _FakeTransferRepository implements TransferTransactionRepository {
     String code, {
     required List<Map<String, dynamic>> items,
     String? notes,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<void> cancelTransaction(String slug, String code) =>

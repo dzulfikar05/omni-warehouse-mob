@@ -22,12 +22,16 @@ class ApiEndpoints {
   static String inboundHold(String slug) => '/$slug/inbound/hold';
   static String inboundResume(String slug) => '/$slug/inbound/resume';
   static String inboundOptions(String slug) => '/$slug/inbound/options';
+  static String inboundSyncOffline(String slug) =>
+      '/$slug/inbound/sync-offline';
   // OUTBOUND (PENGIRIMAN BARANG)
   static String outboundList(String slug) => '/$slug/outbound/';
   static String outboundDetail(String slug, String code) =>
       '/$slug/outbound/manifests/$code';
   static String outboundCreate(String slug) => '/$slug/outbound/store';
   static String outboundOptions(String slug) => '/$slug/outbound/options';
+  static String outboundSyncOffline(String slug) =>
+      '/$slug/outbound/sync-offline';
   static String outboundVerifyBarcode(String slug) =>
       '/$slug/outbound/verify-barcode';
   static String outboundPicking(String slug) => '/$slug/outbound/picking';
@@ -38,6 +42,8 @@ class ApiEndpoints {
   // STOCK TRANSFER (MUTASI RAK / GUDANG)
   static String transferList(String slug) => '/$slug/stock-transfer/';
   static String transferCreate(String slug) => '/$slug/stock-transfer/store';
+  static String transferSyncOffline(String slug) =>
+      '/$slug/stock-transfer/sync-offline';
   static String transferOptions(String slug) => '/$slug/stock-transfer/options';
   static String transferUpdate(String slug, String code) =>
       '/$slug/stock-transfer/$code';
@@ -46,9 +52,14 @@ class ApiEndpoints {
 
   // STOCK OPNAME (AUDIT FISIK)
   static String opnameActiveSession(String slug) =>
-      '/$slug/stock-opname/active-session';
-  static String opnameVerifyCount(String slug) =>
-      '/$slug/stock-opname/verify-count';
+      '/$slug/stock-opname/active';
+  static String opnameSyncOffline(String slug) =>
+      '/$slug/stock-opname/sync-offline';
+  static String opnameRecordCount(String slug) =>
+      '/$slug/stock-opname/record-count';
+  static String opnameSubmitReview(String slug) =>
+      '/$slug/stock-opname/submit-review';
+  static String opnameVerifyCount(String slug) => opnameRecordCount(slug);
   static String opnameExecute(String slug) =>
       '/$slug/stock-opname/execute-adjustment';
 

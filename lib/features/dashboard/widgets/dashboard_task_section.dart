@@ -12,11 +12,9 @@ class DashboardTaskSection extends StatelessWidget {
   const DashboardTaskSection({
     super.key,
     required this.tasks,
-    required this.onDraftSaved,
   });
 
   final List<DashboardTaskItem> tasks;
-  final VoidCallback onDraftSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -73,7 +71,6 @@ class DashboardTaskSection extends StatelessWidget {
           ],
         ),
         const Gap(10),
-
         if (tasks.isEmpty)
           const _EmptyTasksState()
         else
@@ -153,7 +150,8 @@ class DashboardTaskSection extends StatelessWidget {
                 const Gap(8),
                 IconButton(
                   onPressed: () => Navigator.of(sheetCtx).pop(),
-                  icon: const Icon(LucideIcons.x, color: AppColors.textSecondary),
+                  icon:
+                      const Icon(LucideIcons.x, color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -181,11 +179,11 @@ class DashboardTaskSection extends StatelessWidget {
                       onPressed: () {
                         Navigator.of(sheetCtx).pop();
                         if (!task.isCompleted) {
-                          onDraftSaved();
                           OmniSnackbar.show(
                             context,
-                            message: 'Disimpan ke antrean draf lokal',
-                            icon: LucideIcons.bookmarkCheck,
+                            message:
+                                'Draf offline belum tersedia untuk transaksi ini.',
+                            icon: LucideIcons.info,
                           );
                         }
                       },
@@ -197,7 +195,7 @@ class DashboardTaskSection extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        task.isCompleted ? 'Tutup' : 'Simpan Draf',
+                        task.isCompleted ? 'Tutup' : 'Butuh Online',
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -214,7 +212,8 @@ class DashboardTaskSection extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.of(sheetCtx).pop();
-                        if (task.route.isNotEmpty && task.route != '/dashboard') {
+                        if (task.route.isNotEmpty &&
+                            task.route != '/dashboard') {
                           context.push(task.route);
                         } else {
                           OmniSnackbar.show(

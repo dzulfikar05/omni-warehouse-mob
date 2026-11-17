@@ -2,13 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_warehouse_mob/core/auth/auth_provider.dart';
+import 'package:omni_warehouse_mob/core/offline/offline_db.dart';
 import 'package:omni_warehouse_mob/features/outbound/outbound_list_screen.dart';
 import 'package:omni_warehouse_mob/features/outbound/outbound_model.dart';
 import 'package:omni_warehouse_mob/features/outbound/outbound_repository.dart';
 import 'package:omni_warehouse_mob/features/outbound/outbound_scanner_screen.dart';
 import 'package:omni_warehouse_mob/features/outbound/widgets/create_manifest_modal.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  setUpAll(() async {
+    sqfliteFfiInit();
+    await OfflineDb.init(
+      factory: databaseFactoryFfi,
+      databasePath: inMemoryDatabasePath,
+      initializeHive: false,
+    );
+  });
+
   testWidgets('outbound manifest form fits mobile with keyboard visible', (
     tester,
   ) async {
@@ -29,12 +40,14 @@ void main() {
         ),
       ),
     );
+    await _flushOfflineIo(tester);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
     expect(find.text('Pilih Customer / Pelanggan'), findsOneWidget);
     expect(find.text('No. Kendaraan (Opsional)'), findsOneWidget);
     expect(find.text('Nama Driver (Opsional)'), findsOneWidget);
+    expect(find.textContaining('Barcode: 0034'), findsOneWidget);
   });
 
   testWidgets('outbound list opens SO manifest form with customer and SKU', (
@@ -44,12 +57,16 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(_app(const OutboundListScreen()));
+    await tester.pump();
+    await _flushOfflineIo(tester);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
     expect(find.text('Buat Manifes SO'), findsOneWidget);
 
     await tester.tap(find.text('Buat Manifes SO').first);
+    await tester.pump();
+    await _flushOfflineIo(tester);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -70,11 +87,15 @@ void main() {
     await tester.pumpWidget(
       _app(const OutboundScannerScreen(code: 'TX-OUT-123')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await _flushOfflineIo(tester);
+    await tester.pump();
+    await _flushOfflineIo(tester);
+    await tester.pump(const Duration(seconds: 1));
 
     expect(tester.takeException(), isNull);
     expect(find.text('Workspace Picking'), findsOneWidget);
-    expect(find.text('Verifikasi Barcode / SKU'), findsOneWidget);
+    expect(find.text('Scan Barcode / Cari SKU Picking'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(find.byTooltip('Buka Kamera Scanner'), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -500));
@@ -82,7 +103,14 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Detail Item Picking & Source Rack'), findsOneWidget);
     expect(find.textContaining('SKU-34'), findsOneWidget);
+    expect(find.text('RACK-B2-01 · 15 unit'), findsOneWidget);
   });
+}
+
+Future<void> _flushOfflineIo(WidgetTester tester) async {
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 500)),
+  );
 }
 
 Widget _app(Widget home) => ProviderScope(
@@ -170,7 +198,12 @@ class _FakeOutboundRepository implements OutboundRepository {
       ),
     ],
     locations: const [
-      OutboundLocation(id: 5, rackCode: 'RACK-B2-01', zone: 'B2'),
+      OutboundLocation(
+        id: 5,
+        rackCode: 'RACK-B2-01',
+        zone: 'B2',
+        stockQuantity: 15,
+      ),
     ],
   );
 

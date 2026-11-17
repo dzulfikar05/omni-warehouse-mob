@@ -91,6 +91,8 @@ class InboundProductMaster {
   final String sku;
   final String barcode;
   final String name;
+  final String unit;
+  final int? availableStock;
 
   InboundProductMaster({
     required this.id,
@@ -98,6 +100,8 @@ class InboundProductMaster {
     required this.sku,
     required this.barcode,
     required this.name,
+    this.unit = 'pcs',
+    this.availableStock,
   });
 
   factory InboundProductMaster.fromJson(Map<String, dynamic> json) {
@@ -107,6 +111,13 @@ class InboundProductMaster {
       sku: json['sku']?.toString() ?? '',
       barcode: json['barcode']?.toString() ?? json['sku']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
+      unit: (json['unit'] ?? json['unit_name'] ?? 'pcs').toString(),
+      availableStock: _asNullableInt(
+        json['available_stock'] ??
+            json['available_quantity'] ??
+            json['stock_qty'] ??
+            json['quantity'],
+      ),
     );
   }
 }
@@ -145,19 +156,16 @@ class InboundItem {
 
     return InboundItem(
       id: json['id']?.toString() ?? '',
-      productId:
-          int.tryParse(
+      productId: int.tryParse(
             (json['sku_id'] ?? json['product_id'] ?? productMap?['id'] ?? '')
                 .toString(),
           ) ??
           0,
       sku: json['sku']?.toString() ?? productMap?['sku']?.toString() ?? '',
-      barcode:
-          json['barcode']?.toString() ??
+      barcode: json['barcode']?.toString() ??
           productMap?['barcode']?.toString() ??
           '',
-      name:
-          json['product_name']?.toString() ??
+      name: json['product_name']?.toString() ??
           json['name']?.toString() ??
           productMap?['name']?.toString() ??
           'Barang Inbound',
@@ -166,8 +174,7 @@ class InboundItem {
       ),
       goodQty: _asInt(json['good_qty'] ?? json['goodQty']),
       damagedQty: _asInt(json['damaged_qty'] ?? json['damagedQty']),
-      targetRack:
-          json['target_rack']?.toString() ??
+      targetRack: json['target_rack']?.toString() ??
           (json['location'] is Map
               ? json['location']['rack_code']?.toString()
               : null),
@@ -188,6 +195,9 @@ class InboundManifest {
     required this.status,
     required this.items,
     this.totalSkus = 0,
+    this.isOfflinePending = false,
+    this.localUuid,
+    this.syncError,
   });
 
   final String code;
@@ -197,6 +207,9 @@ class InboundManifest {
   InboundStatus status;
   final List<InboundItem> items;
   final int totalSkus;
+  final bool isOfflinePending;
+  final String? localUuid;
+  final String? syncError;
 
   factory InboundManifest.fromJson(Map<String, dynamic> json) {
     final supplierMap = json['supplier'] is Map ? json['supplier'] : null;
@@ -210,25 +223,21 @@ class InboundManifest {
         }
       }
     }
-    final totalSkus =
-        int.tryParse(
+    final totalSkus = int.tryParse(
           (json['total_skus'] ?? json['total_sku'])?.toString() ?? '',
         ) ??
         0;
 
     return InboundManifest(
       code: json['manifest_code']?.toString() ?? json['code']?.toString() ?? '',
-      supplierId:
-          int.tryParse(
+      supplierId: int.tryParse(
             (json['supplier_id'] ?? supplierMap?['id'] ?? '').toString(),
           ) ??
           0,
-      supplierName:
-          supplierMap?['name']?.toString() ??
+      supplierName: supplierMap?['name']?.toString() ??
           json['supplier_name']?.toString() ??
           'Supplier Master',
-      totalUnits:
-          int.tryParse(json['total_units']?.toString() ?? '') ??
+      totalUnits: int.tryParse(json['total_units']?.toString() ?? '') ??
           itemList.fold(0, (sum, i) => sum + i.expectedQty),
       status: InboundStatus.fromString(json['status']?.toString()),
       items: itemList,
@@ -293,19 +302,38 @@ class InboundStats {
 }
 
 class InboundLocation {
-  const InboundLocation({required this.id, required this.rackCode, this.zone});
+  const InboundLocation({
+    required this.id,
+    required this.rackCode,
+    this.zone,
+    this.stockQuantity,
+  });
 
   final int id;
   final String rackCode;
   final String? zone;
+  final int? stockQuantity;
 
   factory InboundLocation.fromJson(Map<String, dynamic> json) =>
       InboundLocation(
         id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
         rackCode: json['rack_code']?.toString() ?? '',
         zone: json['zone']?.toString(),
+        stockQuantity: _asNullableInt(
+          json['stock_quantity'] ??
+              json['stock_qty'] ??
+              json['current_qty'] ??
+              json['stock'] ??
+              json['available_quantity'] ??
+              json['available_stock'] ??
+              json['quantity'] ??
+              json['qty'],
+        ),
       );
 }
+
+int? _asNullableInt(dynamic value) =>
+    value == null ? null : int.tryParse(value.toString());
 
 class InboundManifestDetail {
   const InboundManifestDetail({

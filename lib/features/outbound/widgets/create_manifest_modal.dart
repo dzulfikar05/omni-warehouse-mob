@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_provider.dart';
+import '../../../core/offline/offline_identity.dart';
+import '../../../core/offline/sync_manager.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/omni_snackbar.dart';
+import '../outbound_local_id.dart';
 import '../outbound_model.dart';
 import '../outbound_repository.dart';
 
@@ -22,6 +26,7 @@ class _CreateOutboundManifestModalState
   final _driverController = TextEditingController();
   final _notesController = TextEditingController();
   final List<_OutboundItemDraft> _items = [];
+  final String _localUuid = generateOutboundLocalId();
 
   List<OutboundCustomer> _customers = const [];
   List<OutboundProductMaster> _products = const [];
@@ -52,13 +57,10 @@ class _CreateOutboundManifestModalState
       _isLoading = true;
       _loadError = null;
     });
-    final auth = ref.read(authProvider);
     try {
       final options = await ref
-          .read(outboundDataSourceProvider)
-          .getMasterOptions(
-            auth.tenantSlug ?? auth.tenantName ?? 'demo-tenant',
-          );
+          .read(outboundRepositoryProvider.notifier)
+          .loadMasterOptions();
       if (!mounted) return;
       setState(() {
         _customers = options.customers;
@@ -125,21 +127,83 @@ class _CreateOutboundManifestModalState
 
     setState(() => _isSubmitting = true);
     try {
+      final auth = ref.read(authProvider);
+      final tenantSlug = auth.tenantSlug ?? auth.tenantName ?? 'demo-tenant';
+      final ownerKey = offlineOwnerKey(
+        userId: auth.userId,
+        token: auth.token ?? 'unauthenticated',
+      );
+      final offlineItems = payload
+          .map(
+            (item) => <String, dynamic>{
+              'sku_id': item['sku_id'],
+              'so_qty': item['so_qty'],
+              'good_qty': 0,
+              'damaged_qty': 0,
+              'source_rack_id': null,
+              'source_rack': null,
+              'damage_note': null,
+            },
+          )
+          .toList();
+      final metadataItems = List.generate(_items.length, (index) {
+        final item = _items[index];
+        return {
+          ...payload[index],
+          'sku': item.product.sku,
+          'barcode': item.product.barcode,
+          'name': item.product.name,
+          'unit': item.product.unit,
+        };
+      });
       await ref
           .read(outboundRepositoryProvider.notifier)
-          .createManifest(
-            customerId: customer.id,
-            items: payload,
-            vehicleNo: _vehicleController.text,
-            driverName: _driverController.text,
-            notes: _notesController.text,
+          .queueOfflineManifest(
+            localUuid: _localUuid,
+            payload: {
+              'manifest_code': _localUuid,
+              'local_uuid': _localUuid,
+              'transaction_uuid': _localUuid,
+              'customer_id': customer.id,
+              'vehicle_no': _vehicleController.text.trim(),
+              'driver_name': _driverController.text.trim(),
+              'notes': _notesController.text.trim(),
+              'should_commit': false,
+              'items': offlineItems,
+            },
+            metadata: {
+              'customer_id': customer.id,
+              'customer_name': customer.name,
+              'items': metadataItems,
+            },
           );
+      final result = await SyncManager.instance.syncOutboundQueue(
+        dio: ref.read(dioProvider),
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+        authToken: auth.token ?? '',
+        localUuid: _localUuid,
+      );
+      String? refreshError;
+      try {
+        await ref.read(outboundRepositoryProvider.notifier).loadManifests();
+      } catch (error) {
+        refreshError = error.toString();
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
       OmniSnackbar.show(
         context,
-        message: 'Manifes SO outbound berhasil dibuat.',
-        icon: Icons.check_circle_rounded,
+        message: result.syncedCount == 1 && result.failures.isEmpty
+            ? refreshError == null
+                  ? 'Manifes SO outbound berhasil dibuat.'
+                  : 'Manifes berhasil disinkronkan, tetapi daftar gagal dimuat: $refreshError'
+            : result.failures.isNotEmpty
+            ? 'Manifes $_localUuid tersimpan lokal; sync gagal: ${result.failures.first.message}'
+            : 'Manifes $_localUuid tersimpan lokal dan menunggu sinkronisasi.',
+        icon: result.syncedCount == 1 && result.failures.isEmpty
+            ? Icons.check_circle_rounded
+            : Icons.cloud_off_rounded,
       );
     } catch (error) {
       if (mounted) {
@@ -427,6 +491,8 @@ class _CreateOutboundManifestModalState
                                   decoration: _decoration(hint: 'Pilih SKU'),
                                 ),
                                 const SizedBox(height: 8),
+                                _buildProductDetails(item.product),
+                                const SizedBox(height: 8),
                                 const _FieldLabel('Jumlah SO'),
                                 Row(
                                   children: [
@@ -518,6 +584,39 @@ class _CreateOutboundManifestModalState
         ],
       ),
     ],
+  );
+
+  Widget _buildProductDetails(OutboundProductMaster product) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(9),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceAlt,
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          product.name,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          'SKU: ${product.sku} · Barcode: ${product.barcode.isEmpty ? '-' : product.barcode}',
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+        Text(
+          product.availableStock == null
+              ? 'Satuan: ${product.unit} · Stok rak tersedia pada detail picking'
+              : 'Stok tersedia: ${product.availableStock} ${product.unit}',
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+      ],
+    ),
   );
 
   InputDecoration _decoration({String? hint}) => InputDecoration(

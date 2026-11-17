@@ -27,7 +27,6 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
 
   OutboundManifestDetail? _detail;
   OutboundItem? _selectedItem;
-  int? _selectedSourceRackId;
   bool _isLoading = true;
   bool _isScanning = false;
   bool _isCameraScannerOpen = false;
@@ -89,7 +88,6 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
       _goodQtyController.text = item.pickedQty.toString();
       _damagedQtyController.text = item.damagedQty.toString();
       _damageNoteController.text = item.notes ?? '';
-      _selectedSourceRackId = item.sourceRackId;
     });
     _openItemPickingSheet(item);
   }
@@ -191,20 +189,19 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
     required int goodQty,
     required int damagedQty,
     required int? sourceRackId,
+    String? sourceRack,
     String? damageNote,
   }) async {
-    final itemId = int.tryParse(item.id);
-    if (itemId == null) return;
-
     setState(() => _isSaving = true);
     try {
       final notifier = ref.read(outboundRepositoryProvider.notifier);
       await notifier.savePicking(
         manifestCode: widget.code,
-        itemId: itemId,
+        itemId: item.id,
         goodQty: goodQty,
         damagedQty: damagedQty,
         sourceRackId: sourceRackId,
+        sourceRack: sourceRack,
         damageNote: damageNote,
       );
       if (!mounted) return;
@@ -262,14 +259,7 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
       text: item.damagedQty.toString(),
     );
     final damageNoteCtrl = TextEditingController(text: item.notes ?? '');
-    final rackCode = item.fromRack.isNotEmpty &&
-            item.fromRack != 'Belum Dialokasi' &&
-            item.fromRack != 'Belum dialokasikan'
-        ? item.fromRack
-        : (_rackById(item.sourceRackId)?.rackCode ?? 'Belum dialokasikan');
-    final hasValidRack = rackCode != 'Belum dialokasikan' &&
-        rackCode != 'Belum Dialokasi' &&
-        rackCode.isNotEmpty;
+    OutboundLocation? selectedLocalRack = _rackById(item.sourceRackId);
 
     showModalBottomSheet<void>(
       context: context,
@@ -299,6 +289,21 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                 ((int.tryParse(goodQtyCtrl.text.trim()) ?? 0) +
                     (int.tryParse(damagedQtyCtrl.text.trim()) ?? 0)) >=
                 item.orderQty;
+            final rackCode = order.isOfflinePending
+                ? (selectedLocalRack?.rackCode ??
+                      (item.fromRack.isNotEmpty
+                          ? item.fromRack
+                          : 'Belum dialokasikan'))
+                : (item.fromRack.isNotEmpty &&
+                          item.fromRack != 'Belum Dialokasi' &&
+                          item.fromRack != 'Belum dialokasikan'
+                      ? item.fromRack
+                      : (_rackById(item.sourceRackId)?.rackCode ??
+                            'Belum dialokasikan'));
+            final hasValidRack =
+                rackCode != 'Belum dialokasikan' &&
+                rackCode != 'Belum Dialokasi' &&
+                rackCode.isNotEmpty;
 
             return Padding(
               padding: EdgeInsets.only(
@@ -447,7 +452,35 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Read-only Source Rack Info Card
+                      if (order.isOfflinePending &&
+                          _detail!.locations.isNotEmpty) ...[
+                        DropdownButtonFormField<OutboundLocation>(
+                          initialValue: selectedLocalRack,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Pilih source rack',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _detail!.locations
+                              .map(
+                                (location) => DropdownMenuItem(
+                                  value: location,
+                                  child: Text(
+                                    location.rackCode,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: canEdit
+                              ? (location) => setSheetState(
+                                  () => selectedLocalRack = location,
+                                )
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
@@ -456,8 +489,8 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: hasValidRack
-                              ? AppColors.primaryLight.withOpacity(0.4)
-                              : AppColors.warningLight.withOpacity(0.5),
+                              ? AppColors.primaryLight.withValues(alpha: 0.4)
+                              : AppColors.warningLight.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: hasValidRack
@@ -567,7 +600,12 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                                     item: item,
                                     goodQty: goodQty,
                                     damagedQty: damagedQty,
-                                    sourceRackId: item.sourceRackId,
+                                    sourceRackId: order.isOfflinePending
+                                        ? selectedLocalRack?.id
+                                        : item.sourceRackId,
+                                    sourceRack: order.isOfflinePending
+                                        ? selectedLocalRack?.rackCode
+                                        : item.fromRack,
                                     damageNote:
                                         damageNoteCtrl.text.trim().isEmpty
                                         ? null
@@ -1118,50 +1156,87 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
         ),
       );
 
-  Widget _buildItemsCard(List<OutboundItem> items, OutboundOrder order) =>
-      _card(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Detail Item Picking & Source Rack',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    'Semua (${items.length})',
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            if (items.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(18),
+  Widget _buildItemsCard(
+    List<OutboundItem> items,
+    OutboundOrder order,
+  ) => _card(
+    padding: EdgeInsets.zero,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+          child: Row(
+            children: [
+              const Expanded(
                 child: Text(
-                  'Manifes ini belum memiliki item.',
-                  style: TextStyle(color: AppColors.textMuted),
+                  'Detail Item Picking & Source Rack',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              )
-            else
-              ...items.map((item) => _buildItemRow(item, order)),
-          ],
+              ),
+              Text(
+                'Semua (${items.length})',
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
         ),
-      );
+        const Divider(height: 1),
+        if (_detail!.locations.any(
+          (location) => location.stockQuantity != null,
+        ))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Stok per rak',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _detail!.locations
+                      .where((location) => location.stockQuantity != null)
+                      .map(
+                        (location) => Chip(
+                          label: Text(
+                            '${location.rackCode} · ${location.stockQuantity} unit',
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+        if (items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(18),
+            child: Text(
+              'Manifes ini belum memiliki item.',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          )
+        else
+          ...items.map((item) => _buildItemRow(item, order)),
+      ],
+    ),
+  );
 
   Widget _buildItemRow(OutboundItem item, OutboundOrder order) {
     final canEdit =
@@ -1258,8 +1333,9 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                 final Color rackBg = hasValidRack
                     ? AppColors.primaryLight
                     : AppColors.warningLight;
-                final Color rackFg =
-                    hasValidRack ? AppColors.primary : AppColors.warning;
+                final Color rackFg = hasValidRack
+                    ? AppColors.primary
+                    : AppColors.warning;
 
                 final String statusText;
                 final Color statusBg;

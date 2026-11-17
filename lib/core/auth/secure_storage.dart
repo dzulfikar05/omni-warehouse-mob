@@ -7,6 +7,7 @@ class SecureStorage {
   final _storage = const FlutterSecureStorage();
 
   static const _kToken = 'auth_token';
+  static const _kUserId = 'user_id';
   static const _kTenantSlug = 'tenant_slug';
   static const _kTenantName = 'tenant_name';
   static const _kUserName = 'user_name';
@@ -43,12 +44,18 @@ class SecureStorage {
   /// Menyimpan seluruh kredensial sesi setelah login berhasil
   Future<void> saveSession({
     required String token,
+    int? userId,
     required String tenantSlug,
     required String tenantName,
     required String userName,
     required String userRole,
   }) async {
     await saveToken(token);
+    if (userId != null) {
+      await _storage.write(key: _kUserId, value: userId.toString());
+    } else {
+      await _storage.delete(key: _kUserId);
+    }
     await saveTenant(slug: tenantSlug, name: tenantName);
     await _storage.write(key: _kUserName, value: userName);
     await _storage.write(key: _kUserRole, value: userRole);
@@ -56,11 +63,17 @@ class SecureStorage {
 
   Future<String?> getUserName() async => await _storage.read(key: _kUserName);
 
+  Future<int?> getUserId() async {
+    final value = await _storage.read(key: _kUserId);
+    return value == null ? null : int.tryParse(value);
+  }
+
   Future<String?> getUserRole() async => await _storage.read(key: _kUserRole);
 
   /// Menghapus seluruh sesi login saat logout (tetap mempertahankan konfigurasi server)
   Future<void> clearSession() async {
     await _storage.delete(key: _kToken);
+    await _storage.delete(key: _kUserId);
     await _storage.delete(key: _kTenantSlug);
     await _storage.delete(key: _kTenantName);
     await _storage.delete(key: _kUserName);

@@ -41,6 +41,7 @@ class UserModel {
 class AuthSession {
   const AuthSession({
     required this.token,
+    this.userId,
     required this.userName,
     required this.userRole,
     required this.tenantSlug,
@@ -48,6 +49,7 @@ class AuthSession {
   });
 
   final String token;
+  final int? userId;
   final String userName;
   final String userRole;
   final String tenantSlug;
@@ -105,6 +107,9 @@ class AuthSession {
 
     return AuthSession(
       token: token,
+      userId: int.tryParse(
+        (userData['id'] ?? userData['user_id'])?.toString() ?? '',
+      ),
       userName: userName,
       userRole: userRole ?? '',
       tenantSlug: tenantSlug,

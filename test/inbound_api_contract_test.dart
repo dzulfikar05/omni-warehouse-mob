@@ -67,6 +67,7 @@ void main() {
 
         await repository.createManifest(
           'tenant-a',
+          localUuid: 'offline-uuid-1',
           supplierId: 3,
           items: [
             {'product_id': 5, 'sku_id': 17, 'expected_qty': 10, 'po_qty': 10},
@@ -76,6 +77,7 @@ void main() {
         expect(capturedRequest?.method, 'POST');
         expect(capturedRequest?.path, '/tenant-a/inbound/store');
         expect(capturedRequest?.data, {
+          'local_uuid': 'offline-uuid-1',
           'supplier_id': 3,
           'items': [
             {'product_id': 5, 'sku_id': 17, 'expected_qty': 10, 'po_qty': 10},
@@ -153,7 +155,12 @@ void main() {
                 },
               ],
               'available_locations': [
-                {'id': 7, 'rack_code': 'RACK-A1-01', 'zone': 'A1'},
+                {
+                  'id': 7,
+                  'rack_code': 'RACK-A1-01',
+                  'zone': 'A1',
+                  'stock_qty': 12,
+                },
               ],
             },
           }),
@@ -173,6 +180,7 @@ void main() {
         expect(item.goodQty, 2);
         expect(item.damagedQty, 1);
         expect(result.locations.single.rackCode, 'RACK-A1-01');
+        expect(result.locations.single.stockQuantity, 12);
       },
     );
 

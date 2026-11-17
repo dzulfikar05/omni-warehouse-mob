@@ -14,6 +14,8 @@ import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'dashboard_repository.dart';
 import '../inbound/inbound_repository.dart';
+import '../outbound/outbound_repository.dart';
+import '../stock_opname/stock_opname_repository.dart';
 import 'widgets/dashboard_hero_scan_card.dart';
 import 'widgets/dashboard_kpi_grid.dart';
 import 'widgets/dashboard_shift_strip.dart';
@@ -45,11 +47,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final auth = ref.read(authProvider);
     if (auth.tenantSlug == null || auth.token == null) return;
     try {
-      final count = await OfflineDb.countInboundQueue(
+      final inboundCount = await OfflineDb.countInboundQueue(
         tenantSlug: auth.tenantSlug!,
         ownerKey: offlineOwnerKey(userId: auth.userId, token: auth.token!),
       );
-      if (mounted) setState(() => _offlineQueueCount = count);
+      final outboundCount = await OfflineDb.countOutboundQueue(
+        tenantSlug: auth.tenantSlug!,
+        ownerKey: offlineOwnerKey(userId: auth.userId, token: auth.token!),
+      );
+      final transferCount = await OfflineDb.countTransferQueue(
+        tenantSlug: auth.tenantSlug!,
+        ownerKey: offlineOwnerKey(userId: auth.userId, token: auth.token!),
+      );
+      final opnameCount = await OfflineDb.countOpnameQueue(
+        tenantSlug: auth.tenantSlug!,
+        ownerKey: offlineOwnerKey(userId: auth.userId, token: auth.token!),
+      );
+      if (mounted) {
+        setState(
+          () => _offlineQueueCount =
+              inboundCount + outboundCount + transferCount + opnameCount,
+        );
+      }
     } catch (error) {
       if (mounted) {
         OmniSnackbar.show(
@@ -66,41 +85,90 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (auth.tenantSlug == null || auth.token == null) return;
     setState(() => _isSyncing = true);
     try {
-      final ownerKey = offlineOwnerKey(
-        userId: auth.userId,
-        token: auth.token!,
-      );
-      final pendingCount = await OfflineDb.countInboundQueue(
+      final ownerKey = offlineOwnerKey(userId: auth.userId, token: auth.token!);
+      final inboundCount = await OfflineDb.countInboundQueue(
         tenantSlug: auth.tenantSlug!,
         ownerKey: ownerKey,
       );
-      if (pendingCount == 0) {
+      final outboundCount = await OfflineDb.countOutboundQueue(
+        tenantSlug: auth.tenantSlug!,
+        ownerKey: ownerKey,
+      );
+      final transferCount = await OfflineDb.countTransferQueue(
+        tenantSlug: auth.tenantSlug!,
+        ownerKey: ownerKey,
+      );
+      final opnameCount = await OfflineDb.countOpnameQueue(
+        tenantSlug: auth.tenantSlug!,
+        ownerKey: ownerKey,
+      );
+      if (inboundCount + outboundCount + transferCount + opnameCount == 0) {
         if (mounted) {
           setState(() => _offlineQueueCount = 0);
           OmniSnackbar.show(
             context,
-            message: 'Tidak ada transaksi inbound yang menunggu sync.',
+            message: 'Tidak ada transaksi yang menunggu sync.',
             icon: LucideIcons.cloudCheck,
           );
         }
         return;
       }
-      final result = await SyncManager.instance.syncInboundQueue(
-        dio: ref.read(dioProvider),
-        tenantSlug: auth.tenantSlug!,
-        ownerKey: ownerKey,
-        authToken: auth.token!,
-      );
-      await ref.read(inboundRepositoryProvider.notifier).loadManifests();
+      var syncedCount = 0;
+      var failureCount = 0;
+      if (inboundCount > 0) {
+        final result = await SyncManager.instance.syncInboundQueue(
+          dio: ref.read(dioProvider),
+          tenantSlug: auth.tenantSlug!,
+          ownerKey: ownerKey,
+          authToken: auth.token!,
+        );
+        syncedCount += result.syncedCount;
+        failureCount += result.failures.length;
+        await ref.read(inboundRepositoryProvider.notifier).loadManifests();
+      }
+      if (outboundCount > 0) {
+        final result = await SyncManager.instance.syncOutboundQueue(
+          dio: ref.read(dioProvider),
+          tenantSlug: auth.tenantSlug!,
+          ownerKey: ownerKey,
+          authToken: auth.token!,
+        );
+        syncedCount += result.syncedCount;
+        failureCount += result.failures.length;
+        await ref.read(outboundRepositoryProvider.notifier).loadManifests();
+      }
+      if (transferCount > 0) {
+        final result = await SyncManager.instance.syncTransferQueue(
+          dio: ref.read(dioProvider),
+          tenantSlug: auth.tenantSlug!,
+          ownerKey: ownerKey,
+          authToken: auth.token!,
+        );
+        syncedCount += result.syncedCount;
+        failureCount += result.failures.length;
+      }
+      if (opnameCount > 0) {
+        final result = await SyncManager.instance.syncOpnameQueue(
+          dio: ref.read(dioProvider),
+          tenantSlug: auth.tenantSlug!,
+          ownerKey: ownerKey,
+          authToken: auth.token!,
+        );
+        syncedCount += result.syncedCount;
+        failureCount += result.failures.length;
+        await ref
+            .read(stockOpnameRepositoryProvider.notifier)
+            .loadActiveSession();
+      }
       await _refreshQueueCount();
       if (!mounted) return;
-      setState(() => _hasSynced = result.failures.isEmpty);
+      setState(() => _hasSynced = failureCount == 0);
       OmniSnackbar.show(
         context,
-        message: result.failures.isEmpty
-            ? '${result.syncedCount} transaksi inbound berhasil disinkronkan.'
-            : '${result.syncedCount} berhasil, ${result.failures.length} gagal. Buka antrean untuk detail.',
-        icon: result.failures.isEmpty
+        message: failureCount == 0
+            ? '$syncedCount transaksi berhasil disinkronkan.'
+            : '$syncedCount berhasil, $failureCount gagal. Buka antrean untuk detail.',
+        icon: failureCount == 0
             ? LucideIcons.cloudCheck
             : Icons.error_outline_rounded,
       );
@@ -164,9 +232,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 // 5. Antrean Tugas Lapangan Hari Ini
                 Skeletonizer(
                   enabled: dashboardState.isLoading,
-                  child: DashboardTaskSection(
-                    tasks: summary.tasks,
-                  ),
+                  child: DashboardTaskSection(tasks: summary.tasks),
                 ),
                 const Gap(14),
 

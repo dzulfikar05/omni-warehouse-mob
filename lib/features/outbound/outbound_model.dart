@@ -235,7 +235,12 @@ class OutboundItem {
                   locationMap['rack_code'] ??
                   '')
               .toString(),
-      orderQty: _asInt(json['so_qty'] ?? json['order_qty'] ?? json['quantity'] ?? json['po_qty']),
+      orderQty: _asInt(
+        json['so_qty'] ??
+            json['order_qty'] ??
+            json['quantity'] ??
+            json['po_qty'],
+      ),
       skuId: _asInt(json['sku_id'] ?? skuMap['id']),
       pickedQty: _asInt(json['good_qty'] ?? json['picked_qty']),
       damagedQty: _asInt(json['damaged_qty']),
@@ -301,6 +306,9 @@ class OutboundOrder {
     this.startedAt,
     this.dispatchedAt,
     this.trackingNumber,
+    this.isOfflinePending = false,
+    this.localId,
+    this.syncError,
   });
 
   final String code;
@@ -320,6 +328,9 @@ class OutboundOrder {
   final String? startedAt;
   final String? dispatchedAt;
   final String? trackingNumber;
+  final bool isOfflinePending;
+  final String? localId;
+  final String? syncError;
 
   int get totalOrderUnits =>
       totalUnits ?? items.fold(0, (sum, it) => sum + it.orderQty);
@@ -359,6 +370,9 @@ class OutboundOrder {
     startedAt: startedAt,
     dispatchedAt: dispatchedAt ?? this.dispatchedAt,
     trackingNumber: trackingNumber,
+    isOfflinePending: isOfflinePending,
+    localId: localId,
+    syncError: syncError,
   );
 
   factory OutboundOrder.fromJson(Map<String, dynamic> json) {
@@ -388,9 +402,17 @@ class OutboundOrder {
       vehicleNo: json['vehicle_no']?.toString(),
       driverName: json['driver_name']?.toString(),
       notes: json['notes']?.toString(),
-      totalUnits: (json['total_units'] ?? json['total_so_units'] ?? json['total_po_units']) == null
+      totalUnits:
+          (json['total_units'] ??
+                  json['total_so_units'] ??
+                  json['total_po_units']) ==
+              null
           ? null
-          : _asInt(json['total_units'] ?? json['total_so_units'] ?? json['total_po_units']),
+          : _asInt(
+              json['total_units'] ??
+                  json['total_so_units'] ??
+                  json['total_po_units'],
+            ),
       totalSkus: json['total_skus'] == null && json['total_sku'] == null
           ? null
           : _asInt(json['total_skus'] ?? json['total_sku']),

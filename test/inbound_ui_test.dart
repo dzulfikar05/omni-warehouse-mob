@@ -47,7 +47,7 @@ void main() {
     );
     await _flushOfflineIo(tester);
     await tester.pumpAndSettle();
-    expect(find.text('Verifikasi Barcode / SKU'), findsOneWidget);
+    expect(find.text('Scan Barcode / Cari SKU'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(find.byTooltip('Buka Kamera Scanner'), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -500));

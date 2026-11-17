@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/offline/offline_db.dart';
+import '../../core/offline/offline_identity.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'transfer_transaction_model.dart';
@@ -158,27 +160,49 @@ class _TransferTransactionFormScreenState
         return item;
       }).toList();
       final repository = ref.read(transferTransactionRepositoryProvider);
+      String? savedCode;
       if (_isEditing) {
+        savedCode = widget.transaction!.code;
         await repository.updateTransaction(
           slug,
-          widget.transaction!.code,
+          savedCode,
           items: items,
           notes: _notesController.text.trim(),
         );
       } else {
-        await repository.createTransaction(
+        savedCode = await repository.createTransaction(
           slug,
           items: items,
           notes: _notesController.text.trim(),
         );
       }
       if (!mounted) return;
+      final auth = ref.read(authProvider);
+      final localRow = savedCode == null
+          ? null
+          : await OfflineDb.getTransferQueueItem(
+              localUuid: savedCode,
+              tenantSlug: slug,
+              ownerKey: offlineOwnerKey(
+                userId: auth.userId,
+                token: auth.token ?? '',
+              ),
+            );
+      if (!mounted) return;
+      final isWaitingForSync = localRow != null &&
+          (localRow['status'] == 'pending' ||
+              localRow['status'] == 'error' ||
+              localRow['status'] == 'syncing');
       OmniSnackbar.show(
         context,
-        message: _isEditing
-            ? 'Draft mutasi berhasil diperbarui.'
-            : 'Transaksi mutasi stok berhasil dibuat.',
-        icon: Icons.check_circle_rounded,
+        message: isWaitingForSync
+            ? 'Mutasi ${savedCode ?? ''} disimpan lokal dan menunggu sinkronisasi.'
+            : _isEditing
+                ? 'Draft mutasi berhasil diperbarui.'
+                : 'Transaksi mutasi stok berhasil dibuat.',
+        icon: isWaitingForSync
+            ? Icons.cloud_upload_outlined
+            : Icons.check_circle_rounded,
       );
       context.pop(true);
     } catch (error) {
@@ -310,8 +334,8 @@ class _TransferTransactionFormScreenState
                       _isSubmitting
                           ? 'Memproses...'
                           : _isEditing
-                          ? 'Simpan perubahan'
-                          : 'Proses mutasi batch',
+                              ? 'Simpan perubahan'
+                              : 'Proses mutasi batch',
                     ),
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
@@ -333,55 +357,55 @@ class _TransferTransactionFormScreenState
   }
 
   Widget _buildIntro(TransferMasterOptions options) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppColors.border),
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: AppColors.primaryLight,
-            borderRadius: BorderRadius.circular(11),
-          ),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(11),
+              ),
               child: const Icon(
                 Icons.swap_horiz_rounded,
                 color: AppColors.primary,
               ),
-        ),
-        const SizedBox(width: 11),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _isEditing
-                    ? 'Perbarui draft transfer'
-                    : 'Mutasi beberapa item sekaligus',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _isEditing
+                        ? 'Perbarui draft transfer'
+                        : 'Mutasi beberapa item sekaligus',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${options.skus.length} SKU · ${options.locations.length} lokasi tersedia',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 3),
-              Text(
-                '${options.skus.length} SKU · ${options.locations.length} lokasi tersedia',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 
   Widget _buildItemCard(int index, TransferMasterOptions options) {
     final row = _rows[index];
@@ -533,8 +557,8 @@ class _TransferTransactionFormScreenState
                 'Tanggal kedaluwarsa (opsional)',
                 Icons.calendar_today_rounded,
               ).copyWith(
-                    suffixIcon: const Icon(Icons.date_range_rounded, size: 18),
-                  ),
+                suffixIcon: const Icon(Icons.date_range_rounded, size: 18),
+              ),
             ),
           ],
         ],
@@ -572,9 +596,8 @@ class _TransferTransactionFormScreenState
     required List<TransferLocation> locations,
   }) {
     final value = isOrigin ? row.fromLocationId : row.toLocationId;
-    final selectedLocation = locations
-        .where((location) => location.id == value)
-        .firstOrNull;
+    final selectedLocation =
+        locations.where((location) => location.id == value).firstOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -602,12 +625,12 @@ class _TransferTransactionFormScreenState
           onChanged: locations.isEmpty
               ? null
               : (value) => setState(() {
-                  if (isOrigin) {
-                    row.fromLocationId = value;
-                  } else {
-                    row.toLocationId = value;
-                  }
-                }),
+                    if (isOrigin) {
+                      row.fromLocationId = value;
+                    } else {
+                      row.toLocationId = value;
+                    }
+                  }),
           validator: (value) => value == null ? 'Pilih lokasi' : null,
         ),
         if (selectedLocation?.stockQuantity != null)
@@ -626,25 +649,25 @@ class _TransferTransactionFormScreenState
   }
 
   Widget _buildNotesCard() => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppColors.border),
-    ),
-    child: TextFormField(
-      controller: _notesController,
-      maxLines: 3,
-      maxLength: 2000,
-      decoration: _inputDecoration(
-        'Catatan mutasi (opsional)',
-        Icons.notes_rounded,
-      ).copyWith(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: TextFormField(
+          controller: _notesController,
+          maxLines: 3,
+          maxLength: 2000,
+          decoration: _inputDecoration(
+            'Catatan mutasi (opsional)',
+            Icons.notes_rounded,
+          ).copyWith(
             alignLabelWithHint: true,
             hintText: 'Catatan untuk dokumen mutasi',
           ),
-    ),
-  );
+        ),
+      );
 
   InputDecoration _inputDecoration(String label, IconData icon) =>
       InputDecoration(
@@ -668,50 +691,50 @@ class _TransferTransactionFormScreenState
       );
 
   Widget _buildLoadingBanner() => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: AppColors.primaryLight,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: AppColors.primaryBorder),
-    ),
-    child: const Row(
-      children: [
-        SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.primaryLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.primaryBorder),
         ),
-        SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            'Memuat data SKU dan lokasi...',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-          ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Memuat data SKU dan lokasi...',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 
   Widget _buildLoadError() => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: AppColors.dangerLight,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: AppColors.dangerBorder),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildErrorBanner(_loadError ?? 'Gagal memuat opsi mutasi.'),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: _loadOptions,
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('Coba muat ulang'),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.dangerLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.dangerBorder),
         ),
-      ],
-    ),
-  );
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildErrorBanner(_loadError ?? 'Gagal memuat opsi mutasi.'),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _loadOptions,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Coba muat ulang'),
+            ),
+          ],
+        ),
+      );
 
   Widget _buildEmptyMasterBanner(TransferMasterOptions options) {
     final missing = [
@@ -754,18 +777,18 @@ class _TransferTransactionFormScreenState
   }
 
   Widget _buildErrorBanner(String message) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: AppColors.dangerLight,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: AppColors.dangerBorder),
-    ),
-    child: Text(
-      message,
-      style: const TextStyle(color: AppColors.danger, fontSize: 12),
-    ),
-  );
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.dangerLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.dangerBorder),
+        ),
+        child: Text(
+          message,
+          style: const TextStyle(color: AppColors.danger, fontSize: 12),
+        ),
+      );
 }
 
 class _TransferFormRow {
@@ -776,9 +799,9 @@ class _TransferFormRow {
     String quantity = '1',
     String batchNumber = '',
     String expiryDate = '',
-  }) : quantityController = TextEditingController(text: quantity),
-       batchNumberController = TextEditingController(text: batchNumber),
-       expiryDateController = TextEditingController(text: expiryDate);
+  })  : quantityController = TextEditingController(text: quantity),
+        batchNumberController = TextEditingController(text: batchNumber),
+        expiryDateController = TextEditingController(text: expiryDate);
 
   int? skuId;
   int? fromLocationId;

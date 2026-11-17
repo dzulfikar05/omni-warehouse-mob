@@ -29,7 +29,6 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
   InboundManifestDetail? _detail;
   InboundItem? _selectedItem;
   List<String> _availableRacks = const [];
-  String? _selectedRack;
   bool _isLoading = true;
   bool _isScanning = false;
   bool _isCameraScannerOpen = false;
@@ -107,10 +106,6 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
       _goodQtyController.text = item.goodQty.toString();
       _damagedQtyController.text = item.damagedQty.toString();
       _damageNoteController.text = item.notes ?? '';
-      _selectedRack =
-          item.targetRack != null && _availableRacks.contains(item.targetRack)
-              ? item.targetRack
-              : (_availableRacks.isEmpty ? null : _availableRacks.first);
     });
     _openItemPutawaySheet(item);
   }
@@ -442,7 +437,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
                       ),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        value: _availableRacks.contains(currentRack)
+                        initialValue: _availableRacks.contains(currentRack)
                             ? currentRack
                             : null,
                         isExpanded: true,

@@ -12,6 +12,7 @@ import '../../core/offline/sync_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
+import '../stock_opname/stock_opname_repository.dart';
 
 class SyncItemModel {
   SyncItemModel({
@@ -26,6 +27,10 @@ class SyncItemModel {
     required this.uuid,
     required this.icon,
     required this.payloadJson,
+    required this.createdAt,
+    this.isOutbound = false,
+    this.isTransfer = false,
+    this.isOpname = false,
   });
 
   final String id;
@@ -39,6 +44,10 @@ class SyncItemModel {
   final String uuid;
   final IconData icon;
   final Map<String, dynamic> payloadJson;
+  final DateTime createdAt;
+  final bool isOutbound;
+  final bool isTransfer;
+  final bool isOpname;
 }
 
 class SyncScreen extends ConsumerStatefulWidget {
@@ -75,49 +84,187 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
 
   Future<void> _loadQueue() async {
     try {
-      final rows = await OfflineDb.getInboundQueue(
+      final inboundRows = await OfflineDb.getInboundQueue(
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+      );
+      final outboundRows = await OfflineDb.getOutboundQueue(
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+      );
+      final transferRows = await OfflineDb.getTransferQueue(
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+      );
+      final opnameRows = await OfflineDb.getOpnameQueue(
         tenantSlug: _tenantSlug,
         ownerKey: _ownerKey,
       );
       if (!mounted) return;
       setState(() {
-        _queueItems = rows.map((row) {
-          final payload = jsonDecode(row['payload_json'] as String);
-          final payloadMap = Map<String, dynamic>.from(payload as Map);
-          final metadata = jsonDecode(row['metadata_json'] as String);
-          final metadataMap = Map<String, dynamic>.from(metadata as Map);
-          final id = row['local_uuid'] as String;
-          final status = row['status'] as String;
-          final error = row['error_message']?.toString();
-          final items = payloadMap['items'] as List? ?? const [];
-          final totalUnits = items.fold<int>(
-            0,
-            (total, item) =>
-                total + (int.tryParse(item['po_qty'].toString()) ?? 0),
-          );
-          final createdAt = DateTime.parse(row['created_at'] as String);
-          final jsonSize = utf8.encode(jsonEncode(payloadMap)).length;
-          return SyncItemModel(
-            id: id,
-            title: 'Inbound $id',
-            subtitle:
-                '${metadataMap['supplier_name'] ?? 'Supplier'} • $totalUnits unit',
-            statusLabel: status == 'error'
-                ? 'Gagal: ${error ?? 'perlu diperiksa'}'
-                : 'Menunggu sync',
-            statusColor:
-                status == 'error' ? AppColors.danger : const Color(0xFF131B2E),
-            statusBg: status == 'error'
-                ? AppColors.dangerLight
-                : const Color(0xFFDAE2FD),
-            time: '${createdAt.toLocal().hour.toString().padLeft(2, '0')}:'
-                '${createdAt.toLocal().minute.toString().padLeft(2, '0')}',
-            size: '${(jsonSize / 1024).toStringAsFixed(1)} KB',
-            uuid: 'ID lokal: $id',
-            icon: Icons.move_to_inbox_rounded,
-            payloadJson: payloadMap,
-          );
-        }).toList();
+        _queueItems = [
+          ...inboundRows.map((row) {
+            final payload = jsonDecode(row['payload_json'] as String);
+            final payloadMap = Map<String, dynamic>.from(payload as Map);
+            final metadata = jsonDecode(row['metadata_json'] as String);
+            final metadataMap = Map<String, dynamic>.from(metadata as Map);
+            final id = row['local_uuid'] as String;
+            final status = row['status'] as String;
+            final error = row['error_message']?.toString();
+            final items = payloadMap['items'] as List? ?? const [];
+            final totalUnits = items.fold<int>(
+              0,
+              (total, item) =>
+                  total + (int.tryParse(item['po_qty'].toString()) ?? 0),
+            );
+            final createdAt = DateTime.parse(row['created_at'] as String);
+            final jsonSize = utf8.encode(jsonEncode(payloadMap)).length;
+            return SyncItemModel(
+              id: id,
+              title: 'Inbound $id',
+              subtitle:
+                  '${metadataMap['supplier_name'] ?? 'Supplier'} • $totalUnits unit',
+              statusLabel: status == 'error'
+                  ? 'Gagal: ${error ?? 'perlu diperiksa'}'
+                  : 'Menunggu sync',
+              statusColor: status == 'error'
+                  ? AppColors.danger
+                  : const Color(0xFF131B2E),
+              statusBg: status == 'error'
+                  ? AppColors.dangerLight
+                  : const Color(0xFFDAE2FD),
+              time: '${createdAt.toLocal().hour.toString().padLeft(2, '0')}:'
+                  '${createdAt.toLocal().minute.toString().padLeft(2, '0')}',
+              size: '${(jsonSize / 1024).toStringAsFixed(1)} KB',
+              uuid: 'ID lokal: $id',
+              icon: Icons.move_to_inbox_rounded,
+              payloadJson: payloadMap,
+              createdAt: createdAt,
+            );
+          }),
+          ...outboundRows.map((row) {
+            final payload = jsonDecode(row['payload_json'] as String);
+            final payloadMap = Map<String, dynamic>.from(payload as Map);
+            final metadata = jsonDecode(row['metadata_json'] as String);
+            final metadataMap = Map<String, dynamic>.from(metadata as Map);
+            final id = row['local_uuid'] as String;
+            final status = row['status'] as String;
+            final error = row['error_message']?.toString();
+            final items = payloadMap['items'] as List? ?? const [];
+            final totalUnits = items.fold<int>(
+              0,
+              (total, item) =>
+                  total + (int.tryParse(item['so_qty'].toString()) ?? 0),
+            );
+            final createdAt = DateTime.parse(row['created_at'] as String);
+            final jsonSize = utf8.encode(jsonEncode(payloadMap)).length;
+            return SyncItemModel(
+              id: id,
+              title: 'Outbound $id',
+              subtitle:
+                  '${metadataMap['customer_name'] ?? 'Customer'} • $totalUnits unit',
+              statusLabel: status == 'error'
+                  ? 'Gagal: ${error ?? 'perlu diperiksa'}'
+                  : 'Menunggu sync',
+              statusColor: status == 'error'
+                  ? AppColors.danger
+                  : const Color(0xFF131B2E),
+              statusBg: status == 'error'
+                  ? AppColors.dangerLight
+                  : const Color(0xFFDAE2FD),
+              time: '${createdAt.toLocal().hour.toString().padLeft(2, '0')}:'
+                  '${createdAt.toLocal().minute.toString().padLeft(2, '0')}',
+              size: '${(jsonSize / 1024).toStringAsFixed(1)} KB',
+              uuid: 'ID lokal: $id',
+              icon: Icons.outbox_rounded,
+              payloadJson: payloadMap,
+              createdAt: createdAt,
+              isOutbound: true,
+            );
+          }),
+          ...transferRows.map((row) {
+            final payload = jsonDecode(row['payload_json'] as String);
+            final payloadMap = Map<String, dynamic>.from(payload as Map);
+            final metadata = jsonDecode(row['metadata_json'] as String);
+            final metadataMap = Map<String, dynamic>.from(metadata as Map);
+            final id = row['local_uuid'] as String;
+            final status = row['status'] as String;
+            final error = row['error_message']?.toString();
+            final items = payloadMap['items'] as List? ?? const [];
+            final totalUnits = items.fold<int>(
+              0,
+              (total, item) =>
+                  total + (int.tryParse(item['quantity'].toString()) ?? 0),
+            );
+            final createdAt = DateTime.parse(row['created_at'] as String);
+            final jsonSize = utf8.encode(jsonEncode(payloadMap)).length;
+            return SyncItemModel(
+              id: id,
+              title: 'Transfer $id',
+              subtitle:
+                  '${items.length} SKU • $totalUnits unit • ${metadataMap['operator_name'] ?? 'Operator'}',
+              statusLabel: status == 'error'
+                  ? 'Gagal: ${error ?? 'perlu diperiksa'}'
+                  : 'Menunggu sync',
+              statusColor: status == 'error'
+                  ? AppColors.danger
+                  : const Color(0xFF131B2E),
+              statusBg: status == 'error'
+                  ? AppColors.dangerLight
+                  : const Color(0xFFDAE2FD),
+              time: '${createdAt.toLocal().hour.toString().padLeft(2, '0')}:'
+                  '${createdAt.toLocal().minute.toString().padLeft(2, '0')}',
+              size: '${(jsonSize / 1024).toStringAsFixed(1)} KB',
+              uuid: 'ID lokal: $id',
+              icon: Icons.swap_horiz_rounded,
+              payloadJson: payloadMap,
+              createdAt: createdAt,
+              isTransfer: true,
+            );
+          }),
+          ...opnameRows.map((row) {
+            final payload = jsonDecode(row['payload_json'] as String);
+            final payloadMap = Map<String, dynamic>.from(payload as Map);
+            final metadata = jsonDecode(row['metadata_json'] as String);
+            final metadataMap = Map<String, dynamic>.from(metadata as Map);
+            final id = row['local_uuid'] as String;
+            final status = row['status'] as String;
+            final error = row['error_message']?.toString();
+            final items = payloadMap['items'] as List? ?? const [];
+            final totalQty = items.fold<int>(
+              0,
+              (total, item) =>
+                  total + (int.tryParse(item['physical_qty'].toString()) ?? 0),
+            );
+            final createdAt = DateTime.parse(row['created_at'] as String);
+            final jsonSize = utf8.encode(jsonEncode(payloadMap)).length;
+            final sessionCode = metadataMap['session_code']?.toString() ??
+                payloadMap['session_code']?.toString() ??
+                'Sesi Opname';
+            return SyncItemModel(
+              id: id,
+              title: 'Opname $sessionCode',
+              subtitle: '${items.length} item • $totalQty unit',
+              statusLabel: status == 'error'
+                  ? 'Gagal: ${error ?? 'perlu diperiksa'}'
+                  : 'Menunggu sync',
+              statusColor: status == 'error'
+                  ? AppColors.danger
+                  : const Color(0xFF131B2E),
+              statusBg: status == 'error'
+                  ? AppColors.dangerLight
+                  : const Color(0xFFDAE2FD),
+              time: '${createdAt.toLocal().hour.toString().padLeft(2, '0')}:'
+                  '${createdAt.toLocal().minute.toString().padLeft(2, '0')}',
+              size: '${(jsonSize / 1024).toStringAsFixed(1)} KB',
+              uuid: 'ID lokal: $id',
+              icon: Icons.fact_check_outlined,
+              payloadJson: payloadMap,
+              createdAt: createdAt,
+              isOpname: true,
+            );
+          }),
+        ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
       });
     } catch (error) {
       if (mounted) {
@@ -142,20 +289,51 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
 
     setState(() => _isSyncingAll = true);
     try {
-      final result = await SyncManager.instance.syncInboundQueue(
+      final inboundResult = await SyncManager.instance.syncInboundQueue(
         dio: ref.read(dioProvider),
         tenantSlug: _tenantSlug,
         ownerKey: _ownerKey,
         authToken: ref.read(authProvider).token ?? '',
       );
+      final outboundResult = await SyncManager.instance.syncOutboundQueue(
+        dio: ref.read(dioProvider),
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+        authToken: ref.read(authProvider).token ?? '',
+      );
+      final transferResult = await SyncManager.instance.syncTransferQueue(
+        dio: ref.read(dioProvider),
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+        authToken: ref.read(authProvider).token ?? '',
+      );
+      final opnameResult = await SyncManager.instance.syncOpnameQueue(
+        dio: ref.read(dioProvider),
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+        authToken: ref.read(authProvider).token ?? '',
+      );
+      if (opnameResult.syncedCount > 0) {
+        await ref
+            .read(stockOpnameRepositoryProvider.notifier)
+            .loadActiveSession();
+      }
       await _loadQueue();
       if (!mounted) return;
+      final syncedCount = inboundResult.syncedCount +
+          outboundResult.syncedCount +
+          transferResult.syncedCount +
+          opnameResult.syncedCount;
+      final failures = inboundResult.failures.length +
+          outboundResult.failures.length +
+          transferResult.failures.length +
+          opnameResult.failures.length;
       OmniSnackbar.show(
         context,
-        message: result.failures.isEmpty
-            ? '${result.syncedCount} transaksi inbound berhasil disinkronkan.'
-            : '${result.syncedCount} berhasil, ${result.failures.length} gagal. Periksa antrean.',
-        icon: result.failures.isEmpty
+        message: failures == 0
+            ? '$syncedCount transaksi berhasil disinkronkan.'
+            : '$syncedCount berhasil, $failures gagal. Periksa antrean.',
+        icon: failures == 0
             ? Icons.cloud_done_rounded
             : Icons.error_outline_rounded,
       );
@@ -175,21 +353,63 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
   Future<void> _syncSingleItem(SyncItemModel item) async {
     setState(() => _syncingItemId = item.id);
     try {
-      final result = await SyncManager.instance.syncInboundQueue(
-        dio: ref.read(dioProvider),
-        tenantSlug: _tenantSlug,
-        ownerKey: _ownerKey,
-        authToken: ref.read(authProvider).token ?? '',
-        localUuid: item.id,
-      );
+      final token = ref.read(authProvider).token ?? '';
+      String? failureMessage;
+      if (item.isOpname) {
+        final result = await SyncManager.instance.syncOpnameQueue(
+          dio: ref.read(dioProvider),
+          tenantSlug: _tenantSlug,
+          ownerKey: _ownerKey,
+          authToken: token,
+          localUuid: item.id,
+        );
+        if (result.failures.isNotEmpty) {
+          failureMessage = result.failures.first.message;
+        } else if (result.syncedCount > 0) {
+          await ref
+              .read(stockOpnameRepositoryProvider.notifier)
+              .loadActiveSession();
+        }
+      } else if (item.isTransfer) {
+        final result = await SyncManager.instance.syncTransferQueue(
+          dio: ref.read(dioProvider),
+          tenantSlug: _tenantSlug,
+          ownerKey: _ownerKey,
+          authToken: token,
+          localUuid: item.id,
+        );
+        if (result.failures.isNotEmpty) {
+          failureMessage = result.failures.first.message;
+        }
+      } else if (item.isOutbound) {
+        final result = await SyncManager.instance.syncOutboundQueue(
+          dio: ref.read(dioProvider),
+          tenantSlug: _tenantSlug,
+          ownerKey: _ownerKey,
+          authToken: token,
+          localUuid: item.id,
+        );
+        if (result.failures.isNotEmpty) {
+          failureMessage = result.failures.first.message;
+        }
+      } else {
+        final result = await SyncManager.instance.syncInboundQueue(
+          dio: ref.read(dioProvider),
+          tenantSlug: _tenantSlug,
+          ownerKey: _ownerKey,
+          authToken: token,
+          localUuid: item.id,
+        );
+        if (result.failures.isNotEmpty) {
+          failureMessage = result.failures.first.message;
+        }
+      }
       await _loadQueue();
       if (!mounted) return;
       OmniSnackbar.show(
         context,
-        message: result.failures.isEmpty
-            ? '${item.title} berhasil disinkronkan.'
-            : result.failures.first.message,
-        icon: result.failures.isEmpty
+        message: failureMessage ?? '${item.title} berhasil disinkronkan.',
+        icon: failureMessage == null
             ? Icons.check_circle_rounded
             : Icons.error_outline_rounded,
       );
@@ -228,11 +448,29 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
     );
     if (confirmed != true) return;
     try {
-      final deletedCount = await OfflineDb.deleteInboundQueueItem(
-        localUuid: item.id,
-        tenantSlug: _tenantSlug,
-        ownerKey: _ownerKey,
-      );
+      final deletedCount = item.isOpname
+          ? await OfflineDb.deleteOpnameQueueItem(
+              localUuid: item.id,
+              tenantSlug: _tenantSlug,
+              ownerKey: _ownerKey,
+            )
+          : item.isTransfer
+              ? await OfflineDb.deleteTransferQueueItem(
+                  localUuid: item.id,
+                  tenantSlug: _tenantSlug,
+                  ownerKey: _ownerKey,
+                )
+              : item.isOutbound
+                  ? await OfflineDb.deleteOutboundQueueItem(
+                      localUuid: item.id,
+                      tenantSlug: _tenantSlug,
+                      ownerKey: _ownerKey,
+                    )
+                  : await OfflineDb.deleteInboundQueueItem(
+                      localUuid: item.id,
+                      tenantSlug: _tenantSlug,
+                      ownerKey: _ownerKey,
+                    );
       if (deletedCount == 0) {
         if (mounted) {
           OmniSnackbar.show(
@@ -263,8 +501,9 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
   }
 
   void _showPayloadModal(SyncItemModel item) {
-    final prettyJson =
-        const JsonEncoder.withIndent('  ').convert(item.payloadJson);
+    final prettyJson = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(item.payloadJson);
 
     showModalBottomSheet(
       context: context,
@@ -317,8 +556,10 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 ),
                 IconButton(
                   onPressed: () => Navigator.of(ctx).pop(),
-                  icon: const Icon(Icons.close_rounded,
-                      color: AppColors.textSecondary),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -400,7 +641,9 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 7),
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
@@ -409,8 +652,11 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.arrow_back_rounded,
-                                size: 16, color: AppColors.textPrimary),
+                            Icon(
+                              Icons.arrow_back_rounded,
+                              size: 16,
+                              color: AppColors.textPrimary,
+                            ),
                             SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -431,8 +677,10 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primaryLight,
                       borderRadius: BorderRadius.circular(6),
@@ -488,10 +736,12 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
               if (_queueItems.isEmpty)
                 _buildEmptyState()
               else
-                ..._queueItems.map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _buildQueueCard(item),
-                    )),
+                ..._queueItems.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _buildQueueCard(item),
+                  ),
+                ),
 
               const SizedBox(height: 14),
 
@@ -515,8 +765,11 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.file_download_outlined,
-                          size: 18, color: Color(0xFF0B1C30)),
+                      Icon(
+                        Icons.file_download_outlined,
+                        size: 18,
+                        color: Color(0xFF0B1C30),
+                      ),
                       SizedBox(width: 8),
                       Text(
                         'Ekspor Log Sinkronisasi (.json)',
@@ -575,7 +828,9 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                     Flexible(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(999),
@@ -583,8 +838,11 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.autorenew_rounded,
-                                size: 13, color: Colors.white),
+                            Icon(
+                              Icons.autorenew_rounded,
+                              size: 13,
+                              color: Colors.white,
+                            ),
                             SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -670,8 +928,11 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                             ),
                           )
                         else
-                          const Icon(Icons.sync_rounded,
-                              size: 18, color: Color(0xFF004AC6)),
+                          const Icon(
+                            Icons.sync_rounded,
+                            size: 18,
+                            color: Color(0xFF004AC6),
+                          ),
                         const SizedBox(width: 8),
                         Text(
                           _isSyncingAll ? 'Menyinkronkan...' : 'Sync Data',
@@ -783,8 +1044,11 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.schedule_rounded,
-                        size: 13, color: Color(0xFF434655)),
+                    const Icon(
+                      Icons.schedule_rounded,
+                      size: 13,
+                      color: Color(0xFF434655),
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       item.time,
@@ -798,8 +1062,11 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.data_usage_rounded,
-                        size: 13, color: Color(0xFF434655)),
+                    const Icon(
+                      Icons.data_usage_rounded,
+                      size: 13,
+                      color: Color(0xFF434655),
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       item.size,
@@ -813,8 +1080,11 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.fingerprint_rounded,
-                        size: 13, color: Color(0xFF434655)),
+                    const Icon(
+                      Icons.fingerprint_rounded,
+                      size: 13,
+                      color: Color(0xFF434655),
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       item.uuid,
@@ -843,8 +1113,11 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                   padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
                   child: Row(
                     children: [
-                      Icon(Icons.code_rounded,
-                          size: 15, color: Color(0xFF565E74)),
+                      Icon(
+                        Icons.code_rounded,
+                        size: 15,
+                        color: Color(0xFF565E74),
+                      ),
                       SizedBox(width: 5),
                       Text(
                         'Lihat Payload JSON',
@@ -942,10 +1215,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
           Text(
             'Semua data transaksi lokal telah berhasil dikirim ke server pusat.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 11,
-              color: AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
           ),
         ],
       ),

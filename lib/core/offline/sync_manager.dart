@@ -58,23 +58,31 @@ class SyncQueueItem {
 }
 
 class InboundSyncFailure {
-  const InboundSyncFailure({
-    required this.localUuid,
-    required this.message,
-  });
+  const InboundSyncFailure({required this.localUuid, required this.message});
 
   final String localUuid;
   final String message;
 }
 
 class InboundSyncResult {
-  const InboundSyncResult({
-    required this.syncedCount,
-    required this.failures,
-  });
+  const InboundSyncResult({required this.syncedCount, required this.failures});
 
   final int syncedCount;
   final List<InboundSyncFailure> failures;
+}
+
+class OutboundSyncFailure {
+  const OutboundSyncFailure({required this.localUuid, required this.message});
+
+  final String localUuid;
+  final String message;
+}
+
+class OutboundSyncResult {
+  const OutboundSyncResult({required this.syncedCount, required this.failures});
+
+  final int syncedCount;
+  final List<OutboundSyncFailure> failures;
 }
 
 /// Manager untuk offline queue — enqueue, sync, retry.
@@ -82,14 +90,18 @@ class SyncManager {
   SyncManager._();
   static final SyncManager instance = SyncManager._();
   Future<InboundSyncResult>? _activeInboundSync;
+  Future<OutboundSyncResult>? _activeOutboundSync;
+  Future<TransferSyncResult>? _activeTransferSync;
+  Future<OpnameSyncResult>? _activeOpnameSync;
 
   Box<Map> get _box => OfflineDb.syncQueueBox;
 
   List<SyncQueueItem> getPendingItems() {
     return _box.values
         .map((m) => SyncQueueItem.fromMap(m))
-        .where((i) =>
-            i.status == SyncStatus.pending || i.status == SyncStatus.error)
+        .where(
+          (i) => i.status == SyncStatus.pending || i.status == SyncStatus.error,
+        )
         .toList()
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt)); // FIFO
   }
@@ -192,9 +204,7 @@ class SyncManager {
         failures.add(InboundSyncFailure(localUuid: id, message: message));
       } on AppException catch (error) {
         await _markFailed(id, tenantSlug, ownerKey, error.message);
-        failures.add(
-          InboundSyncFailure(localUuid: id, message: error.message),
-        );
+        failures.add(InboundSyncFailure(localUuid: id, message: error.message));
       } on FormatException catch (error) {
         final message = 'Payload offline tidak valid: ${error.message}';
         await _markFailed(id, tenantSlug, ownerKey, message);
@@ -220,6 +230,364 @@ class SyncManager {
         incrementRetry: true,
       );
 
+  Future<OutboundSyncResult> syncOutboundQueue({
+    required Dio dio,
+    required String tenantSlug,
+    required String ownerKey,
+    required String authToken,
+    String? localUuid,
+  }) async {
+    final activeSync = _activeOutboundSync;
+    if (activeSync != null) return activeSync;
+    late final Future<OutboundSyncResult> operation;
+    operation = _performOutboundSync(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: authToken,
+      localUuid: localUuid,
+    ).whenComplete(() {
+      if (identical(_activeOutboundSync, operation)) {
+        _activeOutboundSync = null;
+      }
+    });
+    _activeOutboundSync = operation;
+    return operation;
+  }
+
+  Future<OutboundSyncResult> _performOutboundSync({
+    required Dio dio,
+    required String tenantSlug,
+    required String ownerKey,
+    required String authToken,
+    String? localUuid,
+  }) async {
+    var syncedCount = 0;
+    final failures = <OutboundSyncFailure>[];
+    final rows = await OfflineDb.getOutboundQueue(
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      localUuid: localUuid,
+    );
+
+    for (final row in rows) {
+      final id = row['local_uuid'] as String;
+      await OfflineDb.updateOutboundQueueItem(
+        localUuid: id,
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+        status: 'syncing',
+      );
+      try {
+        final payload = Map<String, dynamic>.from(
+          jsonDecode(row['payload_json'] as String) as Map,
+        );
+        final response = await dio.post(
+          ApiEndpoints.outboundSyncOffline(tenantSlug),
+          data: payload,
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $authToken',
+              'X-Tenant-Slug': tenantSlug,
+            },
+          ),
+        );
+        final body = response.data;
+        if (body is! Map || body['success'] != true) {
+          final message = body is Map ? body['message']?.toString() : null;
+          throw ServerException(
+            message ?? 'Server tidak mengonfirmasi sinkronisasi outbound.',
+          );
+        }
+
+        final data = body['data'];
+        final dataMap = data is Map ? data : const <String, dynamic>{};
+        final manifest = dataMap['manifest'];
+        final manifestMap =
+            manifest is Map ? manifest : const <String, dynamic>{};
+        final serverCode = dataMap['manifest_code']?.toString() ??
+            manifestMap['manifest_code']?.toString() ??
+            dataMap['code']?.toString() ??
+            id;
+        await OfflineDb.updateOutboundQueueItem(
+          localUuid: id,
+          tenantSlug: tenantSlug,
+          ownerKey: ownerKey,
+          status: 'success',
+          serverManifestCode: serverCode,
+        );
+        syncedCount++;
+      } on DioException catch (error) {
+        final message = error.error is AppException
+            ? (error.error as AppException).message
+            : _responseError(error);
+        await _markOutboundFailed(id, tenantSlug, ownerKey, message);
+        failures.add(OutboundSyncFailure(localUuid: id, message: message));
+      } on AppException catch (error) {
+        await _markOutboundFailed(id, tenantSlug, ownerKey, error.message);
+        failures.add(
+          OutboundSyncFailure(localUuid: id, message: error.message),
+        );
+      } on FormatException catch (error) {
+        final message =
+            'Payload offline outbound tidak valid: ${error.message}';
+        await _markOutboundFailed(id, tenantSlug, ownerKey, message);
+        failures.add(OutboundSyncFailure(localUuid: id, message: message));
+      }
+    }
+
+    return OutboundSyncResult(syncedCount: syncedCount, failures: failures);
+  }
+
+  Future<void> _markOutboundFailed(
+    String localUuid,
+    String tenantSlug,
+    String ownerKey,
+    String message,
+  ) =>
+      OfflineDb.updateOutboundQueueItem(
+        localUuid: localUuid,
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+        status: 'error',
+        errorMessage: message,
+        incrementRetry: true,
+      );
+
+  Future<OpnameSyncResult> syncOpnameQueue({
+    required Dio dio,
+    required String tenantSlug,
+    required String ownerKey,
+    required String authToken,
+    String? localUuid,
+  }) async {
+    final activeSync = _activeOpnameSync;
+    if (activeSync != null) return activeSync;
+    late final Future<OpnameSyncResult> operation;
+    operation = _performOpnameSync(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: authToken,
+      localUuid: localUuid,
+    ).whenComplete(() {
+      if (identical(_activeOpnameSync, operation)) {
+        _activeOpnameSync = null;
+      }
+    });
+    _activeOpnameSync = operation;
+    return operation;
+  }
+
+  Future<OpnameSyncResult> _performOpnameSync({
+    required Dio dio,
+    required String tenantSlug,
+    required String ownerKey,
+    required String authToken,
+    String? localUuid,
+  }) async {
+    var syncedCount = 0;
+    final failures = <OpnameSyncFailure>[];
+    final rows = await OfflineDb.getOpnameQueue(
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      localUuid: localUuid,
+    );
+
+    for (final row in rows) {
+      final id = row['local_uuid'] as String;
+      await OfflineDb.updateOpnameQueueItem(
+        localUuid: id,
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+        status: 'syncing',
+      );
+      try {
+        final payload = Map<String, dynamic>.from(
+          jsonDecode(row['payload_json'] as String) as Map,
+        );
+        final response = await dio.post(
+          ApiEndpoints.opnameSyncOffline(tenantSlug),
+          data: payload,
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $authToken',
+              'X-Tenant-Slug': tenantSlug,
+            },
+          ),
+        );
+        final body = response.data;
+        if (body is! Map || body['success'] != true) {
+          final message = body is Map ? body['message']?.toString() : null;
+          throw ServerException(
+            message ?? 'Server tidak mengonfirmasi sinkronisasi opname.',
+          );
+        }
+        await OfflineDb.updateOpnameQueueItem(
+          localUuid: id,
+          tenantSlug: tenantSlug,
+          ownerKey: ownerKey,
+          status: 'success',
+        );
+        syncedCount++;
+      } on DioException catch (error) {
+        final message = error.error is AppException
+            ? (error.error as AppException).message
+            : _responseError(error);
+        await _markOpnameFailed(id, tenantSlug, ownerKey, message);
+        failures.add(OpnameSyncFailure(localUuid: id, message: message));
+      } on AppException catch (error) {
+        await _markOpnameFailed(id, tenantSlug, ownerKey, error.message);
+        failures.add(OpnameSyncFailure(localUuid: id, message: error.message));
+      } on FormatException catch (error) {
+        final message = 'Payload offline opname tidak valid: ${error.message}';
+        await _markOpnameFailed(id, tenantSlug, ownerKey, message);
+        failures.add(OpnameSyncFailure(localUuid: id, message: message));
+      }
+    }
+
+    return OpnameSyncResult(syncedCount: syncedCount, failures: failures);
+  }
+
+  Future<void> _markOpnameFailed(
+    String localUuid,
+    String tenantSlug,
+    String ownerKey,
+    String message,
+  ) =>
+      OfflineDb.updateOpnameQueueItem(
+        localUuid: localUuid,
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+        status: 'error',
+        errorMessage: message,
+        incrementRetry: true,
+      );
+
+  Future<TransferSyncResult> syncTransferQueue({
+    required Dio dio,
+    required String tenantSlug,
+    required String ownerKey,
+    required String authToken,
+    String? localUuid,
+  }) async {
+    final activeSync = _activeTransferSync;
+    if (activeSync != null) return activeSync;
+    late final Future<TransferSyncResult> operation;
+    operation = _performTransferSync(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: authToken,
+      localUuid: localUuid,
+    ).whenComplete(() {
+      if (identical(_activeTransferSync, operation)) {
+        _activeTransferSync = null;
+      }
+    });
+    _activeTransferSync = operation;
+    return operation;
+  }
+
+  Future<TransferSyncResult> _performTransferSync({
+    required Dio dio,
+    required String tenantSlug,
+    required String ownerKey,
+    required String authToken,
+    String? localUuid,
+  }) async {
+    var syncedCount = 0;
+    final failures = <TransferSyncFailure>[];
+    final rows = await OfflineDb.getTransferQueue(
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      localUuid: localUuid,
+    );
+
+    for (final row in rows) {
+      final id = row['local_uuid'] as String;
+      await OfflineDb.updateTransferQueueItem(
+        localUuid: id,
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+        status: 'syncing',
+      );
+      try {
+        final payload = Map<String, dynamic>.from(
+          jsonDecode(row['payload_json'] as String) as Map,
+        );
+        final response = await dio.post(
+          ApiEndpoints.transferSyncOffline(tenantSlug),
+          data: payload,
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $authToken',
+              'X-Tenant-Slug': tenantSlug,
+            },
+          ),
+        );
+        final body = response.data;
+        if (body is! Map || body['success'] != true) {
+          final message = body is Map ? body['message']?.toString() : null;
+          throw ServerException(
+            message ?? 'Server tidak mengonfirmasi sinkronisasi transfer.',
+          );
+        }
+
+        final data = body['data'];
+        final dataMap = data is Map ? data : const <String, dynamic>{};
+        final transfer = dataMap['transfer'];
+        final transferMap =
+            transfer is Map ? transfer : const <String, dynamic>{};
+        final serverCode = dataMap['transfer_code']?.toString() ??
+            transferMap['transfer_code']?.toString() ??
+            dataMap['code']?.toString() ??
+            id;
+        await OfflineDb.updateTransferQueueItem(
+          localUuid: id,
+          tenantSlug: tenantSlug,
+          ownerKey: ownerKey,
+          status: 'success',
+          serverTransferCode: serverCode,
+        );
+        syncedCount++;
+      } on DioException catch (error) {
+        final message = error.error is AppException
+            ? (error.error as AppException).message
+            : _responseError(error);
+        await _markTransferFailed(id, tenantSlug, ownerKey, message);
+        failures.add(TransferSyncFailure(localUuid: id, message: message));
+      } on AppException catch (error) {
+        await _markTransferFailed(id, tenantSlug, ownerKey, error.message);
+        failures.add(
+          TransferSyncFailure(localUuid: id, message: error.message),
+        );
+      } on FormatException catch (error) {
+        final message =
+            'Payload offline transfer tidak valid: ${error.message}';
+        await _markTransferFailed(id, tenantSlug, ownerKey, message);
+        failures.add(TransferSyncFailure(localUuid: id, message: message));
+      }
+    }
+
+    return TransferSyncResult(syncedCount: syncedCount, failures: failures);
+  }
+
+  Future<void> _markTransferFailed(
+    String localUuid,
+    String tenantSlug,
+    String ownerKey,
+    String message,
+  ) =>
+      OfflineDb.updateTransferQueueItem(
+        localUuid: localUuid,
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+        status: 'error',
+        errorMessage: message,
+        incrementRetry: true,
+      );
+
   String _responseError(DioException error) {
     final body = error.response?.data;
     if (body is Map && body['message'] != null) {
@@ -227,4 +595,32 @@ class SyncManager {
     }
     return error.message ?? 'Sinkronisasi gagal karena koneksi/server.';
   }
+}
+
+class TransferSyncFailure {
+  const TransferSyncFailure({required this.localUuid, required this.message});
+
+  final String localUuid;
+  final String message;
+}
+
+class TransferSyncResult {
+  const TransferSyncResult({required this.syncedCount, required this.failures});
+
+  final int syncedCount;
+  final List<TransferSyncFailure> failures;
+}
+
+class OpnameSyncFailure {
+  const OpnameSyncFailure({required this.localUuid, required this.message});
+
+  final String localUuid;
+  final String message;
+}
+
+class OpnameSyncResult {
+  const OpnameSyncResult({required this.syncedCount, required this.failures});
+
+  final int syncedCount;
+  final List<OpnameSyncFailure> failures;
 }

@@ -135,7 +135,9 @@ class _TransferTransactionsScreenState
       builder: (context) => AlertDialog(
         title: const Text('Batalkan mutasi?'),
         content: Text(
-          'Transaksi ${transaction.code} akan dibatalkan. Jika stok sudah berpindah, backend akan membalikkan pergerakan stok.',
+          transaction.isOfflinePending
+              ? 'Transaksi ${transaction.code} belum dikirim ke server dan akan dibatalkan di perangkat ini.'
+              : 'Transaksi ${transaction.code} akan dibatalkan. Jika stok sudah berpindah, backend akan membalikkan pergerakan stok.',
         ),
         actions: [
           TextButton(
@@ -691,6 +693,17 @@ class _TransferTransactionsScreenState
                   ),
                 ],
               ),
+              if (transaction.syncError != null &&
+                  transaction.syncError!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Sync gagal: ${transaction.syncError}',
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -781,10 +794,11 @@ class _TransferTransactionsScreenState
           border: AppColors.dangerBorder,
         );
       case 'draft':
+      case 'error':
         return const _TransferStatusStyle(
-          color: AppColors.textSecondary,
-          background: AppColors.surfaceAlt,
-          border: AppColors.border,
+          color: AppColors.danger,
+          background: AppColors.dangerLight,
+          border: AppColors.dangerBorder,
         );
       default:
         return const _TransferStatusStyle(
@@ -810,6 +824,8 @@ class _TransferTransactionsScreenState
       label = 'Dibatalkan';
     } else if (normalizedStatus == 'draft') {
       label = 'Draft';
+    } else if (normalizedStatus == 'error') {
+      label = 'Gagal sync';
     } else if (normalizedStatus == 'pending') {
       label = 'Pending';
     } else {
@@ -917,6 +933,20 @@ class _TransferDetailSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
+            if (transaction.syncError != null &&
+                transaction.syncError!.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Sinkronisasi gagal: ${transaction.syncError}',
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Row(
               children: [
                 Expanded(

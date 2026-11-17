@@ -86,17 +86,22 @@ class _FakeStockOpnameRepository implements StockOpnameRepository {
       _session;
 
   @override
-  Future<void> recordCount(
+  Future<OpnameSyncOutcome> recordCount(
     String tenantSlug, {
     required int itemId,
     required num physicalQty,
   }) async {
     recordedCounts.add((itemId, physicalQty));
+    return const OpnameSyncOutcome(synced: true);
   }
 
   @override
-  Future<void> submitReview(String tenantSlug, {required int sessionId}) async {
+  Future<OpnameSyncOutcome> submitReview(
+    String tenantSlug, {
+    required int sessionId,
+  }) async {
     submittedSessionIds.add(sessionId);
+    return const OpnameSyncOutcome(synced: true);
   }
 }
 

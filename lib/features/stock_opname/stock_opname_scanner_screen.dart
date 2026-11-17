@@ -79,10 +79,17 @@ class _StockOpnameScannerScreenState
           .recordCount(itemId: item.id, physicalQty: quantity);
       if (!mounted) return;
       HapticFeedback.selectionClick();
+      final updatedSession =
+          ref.read(stockOpnameRepositoryProvider).asData?.value;
+      final waitingForSync = updatedSession?.isOfflinePending == true;
       OmniSnackbar.show(
         context,
-        message: '${item.sku}: jumlah fisik $quantity ${item.unit}',
-        icon: Icons.check_circle_rounded,
+        message: waitingForSync
+            ? '${item.sku}: $quantity ${item.unit} tersimpan lokal, menunggu sync.'
+            : '${item.sku}: jumlah fisik $quantity ${item.unit}',
+        icon: waitingForSync
+            ? Icons.cloud_upload_outlined
+            : Icons.check_circle_rounded,
       );
     } catch (error) {
       if (mounted) {
@@ -109,7 +116,17 @@ class _StockOpnameScannerScreenState
           .read(stockOpnameRepositoryProvider.notifier)
           .recordCount(itemId: item.id, physicalQty: quantity);
       if (mounted) {
-        OmniSnackbar.show(context, message: 'Jumlah fisik berhasil disimpan.');
+        final updatedSession =
+            ref.read(stockOpnameRepositoryProvider).asData?.value;
+        OmniSnackbar.show(
+          context,
+          message: updatedSession?.isOfflinePending == true
+              ? 'Jumlah fisik tersimpan lokal, menunggu sinkronisasi.'
+              : 'Jumlah fisik berhasil disimpan.',
+          icon: updatedSession?.isOfflinePending == true
+              ? Icons.cloud_upload_outlined
+              : Icons.check_circle_rounded,
+        );
       }
     } catch (error) {
       if (mounted) {
@@ -150,9 +167,16 @@ class _StockOpnameScannerScreenState
     try {
       await ref.read(stockOpnameRepositoryProvider.notifier).submitReview();
       if (!mounted) return;
+      final updatedSession =
+          ref.read(stockOpnameRepositoryProvider).asData?.value;
       OmniSnackbar.show(
         context,
-        message: 'Sesi opname berhasil dikirim untuk review supervisor.',
+        message: updatedSession?.isReviewPending == true
+            ? 'Submit review tersimpan lokal dan menunggu sinkronisasi.'
+            : 'Sesi opname berhasil dikirim untuk review supervisor.',
+        icon: updatedSession?.isReviewPending == true
+            ? Icons.cloud_upload_outlined
+            : Icons.check_circle_rounded,
       );
     } catch (error) {
       if (mounted) {
@@ -237,8 +261,7 @@ class _StockOpnameScannerScreenState
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed:
-                            session.allItemsCounted &&
+                        onPressed: session.allItemsCounted &&
                                 !session.isInReview &&
                                 !_isSubmittingReview
                             ? () => _submitReview(session)
@@ -256,9 +279,11 @@ class _StockOpnameScannerScreenState
                         label: Text(
                           session.isInReview
                               ? 'Sudah dikirim untuk review'
-                              : _isSubmittingReview
-                              ? 'Mengirim...'
-                              : 'Selesaikan Opname / Submit Review',
+                              : session.isReviewPending
+                                  ? 'Coba sinkronkan submit review'
+                                  : _isSubmittingReview
+                                      ? 'Mengirim...'
+                                      : 'Selesaikan Opname / Submit Review',
                         ),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
@@ -275,177 +300,185 @@ class _StockOpnameScannerScreenState
   }
 
   Widget _buildSessionContent(StockOpnameSession session) => ListView(
-    padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-    children: [
-      _SessionInfoCard(session: session),
-      const SizedBox(height: 12),
-      _buildScannerPanel(),
-      const SizedBox(height: 16),
-      Row(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
         children: [
-          const Expanded(
-            child: Text(
-              'SKU TARGET',
-              style: TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
+          _SessionInfoCard(session: session),
+          if (session.isOfflinePending) ...[
+            const SizedBox(height: 10),
+            _OpnameSyncBanner(
+              message: session.isReviewPending
+                  ? 'Hitungan dan submit review menunggu sinkronisasi.'
+                  : 'Hitungan tersimpan di perangkat dan menunggu sinkronisasi.',
+              errorMessage: session.syncError,
+            ),
+          ],
+          const SizedBox(height: 12),
+          _buildScannerPanel(),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'SKU TARGET',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              Text(
+                '${session.countedItems}/${session.items.length} dihitung',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (session.items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Center(
+                child: Text(
+                  'Tidak ada SKU untuk dihitung.',
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              ),
+            )
+          else
+            ...session.items.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _CountItemCard(
+                  item: item,
+                  onEdit: () => _editPhysicalQty(item),
+                ),
               ),
             ),
-          ),
-          Text(
-            '${session.countedItems}/${session.items.length} dihitung',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
         ],
-      ),
-      const SizedBox(height: 8),
-      if (session.items.isEmpty)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 28),
-          child: Center(
-            child: Text(
-              'Tidak ada SKU untuk dihitung.',
-              style: TextStyle(color: AppColors.textMuted),
-            ),
-          ),
-        )
-      else
-        ...session.items.map(
-          (item) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _CountItemCard(
-              item: item,
-              onEdit: () => _editPhysicalQty(item),
-            ),
-          ),
-        ),
-    ],
-  );
+      );
 
   Widget _buildScannerPanel() => Container(
-    clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppColors.border),
-    ),
-    child: Column(
-      children: [
-        if (_cameraOpen)
-          SizedBox(
-            height: 210,
-            child: Stack(
-              children: [
-                MobileScanner(
-                  controller: _scannerController,
-                  onDetect: _onDetect,
-                  errorBuilder: (context, error, child) {
-                    final message =
-                        error.errorCode ==
-                            MobileScannerErrorCode.permissionDenied
-                        ? 'Izin kamera ditolak. Aktifkan izin kamera di pengaturan.'
-                        : 'Kamera tidak dapat dibuka: '
-                              '${error.errorDetails?.message ?? error.errorCode.name}';
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          message,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            if (_cameraOpen)
+              SizedBox(
+                height: 210,
+                child: Stack(
+                  children: [
+                    MobileScanner(
+                      controller: _scannerController,
+                      onDetect: _onDetect,
+                      errorBuilder: (context, error, child) {
+                        final message = error.errorCode ==
+                                MobileScannerErrorCode.permissionDenied
+                            ? 'Izin kamera ditolak. Aktifkan izin kamera di pengaturan.'
+                            : 'Kamera tidak dapat dibuka: '
+                                '${error.errorDetails?.message ?? error.errorCode.name}';
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              message,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    Positioned(
+                      right: 6,
+                      top: 6,
+                      child: ValueListenableBuilder<MobileScannerState>(
+                        valueListenable: _scannerController,
+                        builder: (context, state, _) => IconButton.filledTonal(
+                          tooltip: 'Lampu kamera',
+                          onPressed: !state.isInitialized ||
+                                  state.torchState == TorchState.unavailable
+                              ? null
+                              : () => _scannerController.toggleTorch(),
+                          icon: Icon(
+                            state.torchState == TorchState.on
+                                ? Icons.flash_on_rounded
+                                : Icons.flash_off_rounded,
                           ),
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: ValueListenableBuilder<MobileScannerState>(
-                    valueListenable: _scannerController,
-                    builder: (context, state, _) => IconButton.filledTonal(
-                      tooltip: 'Lampu kamera',
-                      onPressed:
-                          !state.isInitialized ||
-                              state.torchState == TorchState.unavailable
-                          ? null
-                          : () => _scannerController.toggleTorch(),
-                      icon: Icon(
-                        state.torchState == TorchState.on
-                            ? Icons.flash_on_rounded
-                            : Icons.flash_off_rounded,
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 17, 16, 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.qr_code_scanner_rounded,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Scan barcode SKU di rak target untuk menambah hitungan fisik.',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 17, 16, 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.qr_code_scanner_rounded,
-                  color: AppColors.primary,
-                  size: 24,
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Scan barcode SKU di rak target untuk menambah hitungan fisik.',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => setState(() => _cameraOpen = !_cameraOpen),
-                  icon: Icon(
-                    _cameraOpen
-                        ? Icons.videocam_off_outlined
-                        : Icons.camera_alt_outlined,
-                  ),
-                  label: Text(_cameraOpen ? 'Tutup kamera' : 'Buka kamera'),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              if (_isRecording)
-                const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                const Icon(
-                  Icons.add_circle_outline_rounded,
-                  color: AppColors.primary,
-                ),
-            ],
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          setState(() => _cameraOpen = !_cameraOpen),
+                      icon: Icon(
+                        _cameraOpen
+                            ? Icons.videocam_off_outlined
+                            : Icons.camera_alt_outlined,
+                      ),
+                      label: Text(_cameraOpen ? 'Tutup kamera' : 'Buka kamera'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_isRecording)
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    const Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: AppColors.primary,
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 }
 
 class _SessionInfoCard extends StatelessWidget {
@@ -455,56 +488,96 @@ class _SessionInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppColors.border),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          session.sessionCode,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontFamily: 'RobotoMono',
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-          ),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
         ),
-        const SizedBox(height: 7),
-        Text(
-          'Gudang: ${session.warehouse.isEmpty ? '-' : session.warehouse}',
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          'Zona: ${session.zone.isEmpty ? '-' : session.zone}',
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-        ),
-        const SizedBox(height: 8),
-        const Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.visibility_off_outlined,
-              color: AppColors.primary,
-              size: 15,
-            ),
-            SizedBox(width: 5),
             Text(
-              'Blind count · stok sistem disembunyikan',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
+              session.sessionCode,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontFamily: 'RobotoMono',
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
               ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              'Gudang: ${session.warehouse.isEmpty ? '-' : session.warehouse}',
+              style:
+                  const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'Zona: ${session.zone.isEmpty ? '-' : session.zone}',
+              style:
+                  const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+            ),
+            const SizedBox(height: 8),
+            const Row(
+              children: [
+                Icon(
+                  Icons.visibility_off_outlined,
+                  color: AppColors.primary,
+                  size: 15,
+                ),
+                SizedBox(width: 5),
+                Text(
+                  'Blind count · stok sistem disembunyikan',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-      ],
-    ),
-  );
+      );
+}
+
+class _OpnameSyncBanner extends StatelessWidget {
+  const _OpnameSyncBanner({required this.message, this.errorMessage});
+
+  final String message;
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.warningLight,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.warningBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (errorMessage != null && errorMessage!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Sync terakhir gagal: $errorMessage',
+                style: const TextStyle(color: AppColors.danger, fontSize: 10),
+              ),
+            ],
+          ],
+        ),
+      );
 }
 
 class _CountItemCard extends StatelessWidget {
@@ -515,82 +588,82 @@ class _CountItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
-    child: InkWell(
-      onTap: onEdit,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onEdit,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: item.physicalQty == null
-                ? AppColors.border
-                : AppColors.successBorder,
-          ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.sku,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontFamily: 'RobotoMono',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    item.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Rak target: ${item.targetRack.isEmpty ? '-' : item.targetRack}',
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: item.physicalQty == null
+                    ? AppColors.border
+                    : AppColors.successBorder,
               ),
             ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Row(
               children: [
-                Text(
-                  item.physicalQty == null
-                      ? '—'
-                      : '${item.physicalQty} ${item.unit}',
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.sku,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontFamily: 'RobotoMono',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        item.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Rak target: ${item.targetRack.isEmpty ? '-' : item.targetRack}',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const Text(
-                  'Jumlah fisik',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 9),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      item.physicalQty == null
+                          ? '—'
+                          : '${item.physicalQty} ${item.unit}',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Text(
+                      'Jumlah fisik',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 9),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 class _PhysicalCountDialog extends StatefulWidget {
@@ -621,41 +694,41 @@ class _PhysicalCountDialogState extends State<_PhysicalCountDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Jumlah fisik'),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('${widget.item.sku} · ${widget.item.targetRack}'),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _quantityController,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(
-            labelText: 'Qty fisik (${widget.item.unit})',
-            border: const OutlineInputBorder(),
-          ),
+        title: const Text('Jumlah fisik'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${widget.item.sku} · ${widget.item.targetRack}'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _quantityController,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                labelText: 'Qty fisik (${widget.item.unit})',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
         ),
-      ],
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Batal'),
-      ),
-      FilledButton(
-        onPressed: () {
-          final parsed = int.tryParse(_quantityController.text.trim());
-          if (parsed == null || parsed < 0) return;
-          FocusScope.of(context).unfocus();
-          Navigator.pop(context, parsed);
-        },
-        child: const Text('Simpan'),
-      ),
-    ],
-  );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final parsed = int.tryParse(_quantityController.text.trim());
+              if (parsed == null || parsed < 0) return;
+              FocusScope.of(context).unfocus();
+              Navigator.pop(context, parsed);
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      );
 }
 
 class _ScannerMessage extends StatelessWidget {
@@ -666,25 +739,26 @@ class _ScannerMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-            ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+              if (onRetry != null) ...[
+                const SizedBox(height: 12),
+                OutlinedButton(
+                    onPressed: onRetry, child: const Text('Muat ulang')),
+              ],
+            ],
           ),
-          if (onRetry != null) ...[
-            const SizedBox(height: 12),
-            OutlinedButton(onPressed: onRetry, child: const Text('Muat ulang')),
-          ],
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }

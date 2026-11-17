@@ -806,8 +806,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   String _getInitials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts[0].isEmpty) return 'BS';
-    if (parts.length == 1)
+    if (parts.length == 1) {
       return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+    }
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 }

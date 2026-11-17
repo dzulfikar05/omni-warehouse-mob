@@ -54,7 +54,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildIdentityCard(String userName, String initials, String tenantName) {
+  Widget _buildIdentityCard(
+    String userName,
+    String initials,
+    String tenantName,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -75,7 +79,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             height: 64,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFFEFF6FF), Color(0xFFEEF2FF), Color(0xFFEFF6FF)],
+                colors: [
+                  Color(0xFFEFF6FF),
+                  Color(0xFFEEF2FF),
+                  Color(0xFFEFF6FF),
+                ],
               ),
               borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
               border: Border(
@@ -177,7 +185,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         variant: OmniBadgeVariant.primary,
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(6),
@@ -207,7 +218,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Quick Shift & Terminal Stats Strip (3 Columns)
+                  // Quick Terminal Stats Strip (2 Columns)
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -218,9 +229,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: Row(
                       children: [
                         _buildStatCol('ID PEGAWAI', 'WH-90241', isMono: true),
-                        Container(width: 1, height: 32, color: AppColors.border),
-                        _buildStatCol('SHIFT AKTIF', 'Pagi', isDot: true),
-                        Container(width: 1, height: 32, color: AppColors.border),
+                        Container(
+                          width: 1,
+                          height: 32,
+                          color: AppColors.border,
+                        ),
                         _buildStatCol('BERGABUNG', '10 Jan 2023'),
                       ],
                     ),
@@ -234,7 +247,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildStatCol(String label, String value, {bool isMono = false, bool isDot = false}) {
+  Widget _buildStatCol(
+    String label,
+    String value, {
+    bool isMono = false,
+    bool isDot = false,
+  }) {
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -332,7 +350,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 7,
+                  vertical: 2.5,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.successLight,
                   borderRadius: BorderRadius.circular(6),
@@ -411,7 +432,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
@@ -472,11 +496,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             iconBg: AppColors.primaryLight,
             title: 'Ubah Kata Sandi',
             subtitle: 'Terakhir diperbarui 45 hari lalu',
-            trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+            trailing: const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textMuted,
+            ),
             onTap: () {
               OmniSnackbar.show(
                 context,
-                message: 'Fitur ganti kata sandi dapat diakses lewat Web Portal',
+                message:
+                    'Fitur ganti kata sandi dapat diakses lewat Web Portal',
                 icon: Icons.info_outline_rounded,
               );
             },
@@ -697,7 +725,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Pastikan semua data transaksi lokal Isar telah tersinkronisasi sebelum mengakhiri shift.',
+                'Pastikan semua data transaksi lokal Isar telah tersinkronisasi sebelum keluar dari aplikasi.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
@@ -741,7 +769,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           if (context.mounted) {
                             OmniSnackbar.show(
                               context,
-                              message: 'Sesi diakhiri. Kembali ke Login Tenant.',
+                              message:
+                                  'Sesi diakhiri. Kembali ke Login Tenant.',
                               icon: Icons.logout_rounded,
                             );
                             context.go('/home');
@@ -777,7 +806,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   String _getInitials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts[0].isEmpty) return 'BS';
-    if (parts.length == 1) return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+    if (parts.length == 1)
+      return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 }

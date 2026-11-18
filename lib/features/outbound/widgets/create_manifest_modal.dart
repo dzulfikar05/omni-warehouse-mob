@@ -177,13 +177,15 @@ class _CreateOutboundManifestModalState
               'items': metadataItems,
             },
           );
-      final result = await SyncManager.instance.syncOutboundQueue(
-        dio: ref.read(dioProvider),
-        tenantSlug: tenantSlug,
-        ownerKey: ownerKey,
-        authToken: auth.token ?? '',
-        localUuid: _localUuid,
-      );
+      final result = await SyncManager.instance.shouldSyncAutomatically()
+          ? await SyncManager.instance.syncOutboundQueue(
+              dio: ref.read(dioProvider),
+              tenantSlug: tenantSlug,
+              ownerKey: ownerKey,
+              authToken: auth.token ?? '',
+              localUuid: _localUuid,
+            )
+          : null;
       String? refreshError;
       try {
         await ref.read(outboundRepositoryProvider.notifier).loadManifests();
@@ -192,16 +194,23 @@ class _CreateOutboundManifestModalState
       }
       if (!mounted) return;
       Navigator.of(context).pop();
+      final synced = result != null &&
+          result.syncedCount == 1 &&
+          result.failures.isEmpty;
       OmniSnackbar.show(
         context,
-        message: result.syncedCount == 1 && result.failures.isEmpty
+        message: synced
             ? refreshError == null
                   ? 'Manifes SO outbound berhasil dibuat.'
                   : 'Manifes berhasil disinkronkan, tetapi daftar gagal dimuat: $refreshError'
+            : result == null
+            ? refreshError == null
+                ? 'Manifes $_localUuid tersimpan lokal dan menunggu sinkronisasi manual.'
+                : 'Manifes tersimpan lokal; daftar gagal dimuat: $refreshError'
             : result.failures.isNotEmpty
             ? 'Manifes $_localUuid tersimpan lokal; sync gagal: ${result.failures.first.message}'
             : 'Manifes $_localUuid tersimpan lokal dan menunggu sinkronisasi.',
-        icon: result.syncedCount == 1 && result.failures.isEmpty
+        icon: synced
             ? Icons.check_circle_rounded
             : Icons.cloud_off_rounded,
       );

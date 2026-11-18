@@ -266,24 +266,29 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
           'items': metadataItems,
         },
       );
-      final result = await SyncManager.instance.syncInboundQueue(
-        dio: ref.read(dioProvider),
-        tenantSlug: tenantSlug,
-        ownerKey: ownerKey,
-        authToken: authState.token ?? '',
-        localUuid: _localUuid,
-      );
+      final result = await SyncManager.instance.shouldSyncAutomatically()
+          ? await SyncManager.instance.syncInboundQueue(
+              dio: ref.read(dioProvider),
+              tenantSlug: tenantSlug,
+              ownerKey: ownerKey,
+              authToken: authState.token ?? '',
+              localUuid: _localUuid,
+            )
+          : null;
       await ref.read(inboundRepositoryProvider.notifier).loadManifests();
-      final synced = result.syncedCount == 1 && result.failures.isEmpty;
+      final synced =
+          result != null && result.syncedCount == 1 && result.failures.isEmpty;
       if (!mounted) return;
       Navigator.pop(context);
       OmniSnackbar.show(
         context,
         message: synced
             ? 'Manifes PO inbound berhasil dibuat.'
-            : result.failures.isEmpty
-                ? 'Manifes inbound disimpan lokal dan menunggu sinkronisasi.'
-                : 'Tersimpan lokal, tetapi sync gagal: ${result.failures.first.message}',
+            : result == null
+                ? 'Manifes inbound disimpan lokal dan menunggu sinkronisasi manual.'
+                : result.failures.isEmpty
+                    ? 'Manifes inbound disimpan lokal dan menunggu sinkronisasi.'
+                    : 'Tersimpan lokal, tetapi sync gagal: ${result.failures.first.message}',
         icon: synced ? Icons.check_circle_rounded : Icons.cloud_off_rounded,
       );
     } catch (error) {

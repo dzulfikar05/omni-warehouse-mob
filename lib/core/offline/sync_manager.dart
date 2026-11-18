@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../api/api_endpoints.dart';
 import '../api/api_exception.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import 'offline_db.dart';
 
 /// Tipe transaksi yang bisa masuk ke offline queue.
@@ -95,6 +96,53 @@ class SyncManager {
   Future<OpnameSyncResult>? _activeOpnameSync;
 
   Box<Map> get _box => OfflineDb.syncQueueBox;
+
+  Future<bool> shouldSyncAutomatically() async {
+    if (!await OfflineDb.isAutomaticSyncEnabled()) return false;
+    return ConnectivityChecker.instance.isOnline();
+  }
+
+  Future<SyncBatchResult> syncAllQueues({
+    required Dio dio,
+    required String tenantSlug,
+    required String ownerKey,
+    required String authToken,
+  }) async {
+    final inbound = await syncInboundQueue(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: authToken,
+    );
+    final outbound = await syncOutboundQueue(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: authToken,
+    );
+    final transfer = await syncTransferQueue(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: authToken,
+    );
+    final opname = await syncOpnameQueue(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: authToken,
+    );
+    return SyncBatchResult(
+      inboundSyncedCount: inbound.syncedCount,
+      outboundSyncedCount: outbound.syncedCount,
+      transferSyncedCount: transfer.syncedCount,
+      opnameSyncedCount: opname.syncedCount,
+      failureCount: inbound.failures.length +
+          outbound.failures.length +
+          transfer.failures.length +
+          opname.failures.length,
+    );
+  }
 
   List<SyncQueueItem> getPendingItems() {
     return _box.values
@@ -623,4 +671,26 @@ class OpnameSyncResult {
 
   final int syncedCount;
   final List<OpnameSyncFailure> failures;
+}
+
+class SyncBatchResult {
+  const SyncBatchResult({
+    required this.inboundSyncedCount,
+    required this.outboundSyncedCount,
+    required this.transferSyncedCount,
+    required this.opnameSyncedCount,
+    required this.failureCount,
+  });
+
+  final int inboundSyncedCount;
+  final int outboundSyncedCount;
+  final int transferSyncedCount;
+  final int opnameSyncedCount;
+  final int failureCount;
+
+  int get syncedCount =>
+      inboundSyncedCount +
+      outboundSyncedCount +
+      transferSyncedCount +
+      opnameSyncedCount;
 }

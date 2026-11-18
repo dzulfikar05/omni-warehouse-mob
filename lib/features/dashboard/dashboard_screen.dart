@@ -86,23 +86,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     setState(() => _isSyncing = true);
     try {
       final ownerKey = offlineOwnerKey(userId: auth.userId, token: auth.token!);
-      final inboundCount = await OfflineDb.countInboundQueue(
+      final result = await SyncManager.instance.syncAllQueues(
+        dio: ref.read(dioProvider),
         tenantSlug: auth.tenantSlug!,
         ownerKey: ownerKey,
+        authToken: auth.token!,
       );
-      final outboundCount = await OfflineDb.countOutboundQueue(
-        tenantSlug: auth.tenantSlug!,
-        ownerKey: ownerKey,
-      );
-      final transferCount = await OfflineDb.countTransferQueue(
-        tenantSlug: auth.tenantSlug!,
-        ownerKey: ownerKey,
-      );
-      final opnameCount = await OfflineDb.countOpnameQueue(
-        tenantSlug: auth.tenantSlug!,
-        ownerKey: ownerKey,
-      );
-      if (inboundCount + outboundCount + transferCount + opnameCount == 0) {
+      if (result.syncedCount == 0 && result.failureCount == 0) {
         if (mounted) {
           setState(() => _offlineQueueCount = 0);
           OmniSnackbar.show(
@@ -113,62 +103,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         }
         return;
       }
-      var syncedCount = 0;
-      var failureCount = 0;
-      if (inboundCount > 0) {
-        final result = await SyncManager.instance.syncInboundQueue(
-          dio: ref.read(dioProvider),
-          tenantSlug: auth.tenantSlug!,
-          ownerKey: ownerKey,
-          authToken: auth.token!,
-        );
-        syncedCount += result.syncedCount;
-        failureCount += result.failures.length;
+      if (result.inboundSyncedCount > 0) {
         await ref.read(inboundRepositoryProvider.notifier).loadManifests();
       }
-      if (outboundCount > 0) {
-        final result = await SyncManager.instance.syncOutboundQueue(
-          dio: ref.read(dioProvider),
-          tenantSlug: auth.tenantSlug!,
-          ownerKey: ownerKey,
-          authToken: auth.token!,
-        );
-        syncedCount += result.syncedCount;
-        failureCount += result.failures.length;
+      if (result.outboundSyncedCount > 0) {
         await ref.read(outboundRepositoryProvider.notifier).loadManifests();
       }
-      if (transferCount > 0) {
-        final result = await SyncManager.instance.syncTransferQueue(
-          dio: ref.read(dioProvider),
-          tenantSlug: auth.tenantSlug!,
-          ownerKey: ownerKey,
-          authToken: auth.token!,
-        );
-        syncedCount += result.syncedCount;
-        failureCount += result.failures.length;
-      }
-      if (opnameCount > 0) {
-        final result = await SyncManager.instance.syncOpnameQueue(
-          dio: ref.read(dioProvider),
-          tenantSlug: auth.tenantSlug!,
-          ownerKey: ownerKey,
-          authToken: auth.token!,
-        );
-        syncedCount += result.syncedCount;
-        failureCount += result.failures.length;
+      if (result.opnameSyncedCount > 0) {
         await ref
             .read(stockOpnameRepositoryProvider.notifier)
             .loadActiveSession();
       }
       await _refreshQueueCount();
       if (!mounted) return;
-      setState(() => _hasSynced = failureCount == 0);
+      setState(() => _hasSynced = result.failureCount == 0);
       OmniSnackbar.show(
         context,
-        message: failureCount == 0
-            ? '$syncedCount transaksi berhasil disinkronkan.'
-            : '$syncedCount berhasil, $failureCount gagal. Buka antrean untuk detail.',
-        icon: failureCount == 0
+        message: result.failureCount == 0
+            ? '${result.syncedCount} transaksi berhasil disinkronkan.'
+            : '${result.syncedCount} berhasil, ${result.failureCount} gagal. Buka antrean untuk detail.',
+        icon: result.failureCount == 0
             ? LucideIcons.cloudCheck
             : Icons.error_outline_rounded,
       );

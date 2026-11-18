@@ -591,17 +591,18 @@ class ReconciliationItem {
 - AppBar: "Sinkronisasi Data"
 - Banner status: Online ✓ / Offline ✗
 - Card summary: "X Berkas menunggu sync"
-- Button besar: "Sync Sekarang" (disabled jika offline)
+- Button besar: "Sync Sekarang" untuk mengirim seluruh antrean manual
 - List inbound pending: nama transaksi + timestamp + jumlah data + status (pending/syncing/done/error)
 - Link: "Hapus Log Sukses" (hapus log yang sudah berhasil)
 
 **Offline Queue Logic:**
 - Pembuatan manifes dan input hitung/putaway inbound disimpan terlebih dahulu ke SQLite dengan ID lokal `TX-INB-XXXXXXXX` yang tetap. Nilai ini dikirim pada field backend `local_uuid` agar retry idempoten.
 - Master supplier, SKU, dan rak di-cache secara terpisah untuk tenant dan pengguna aktif; antrean pengguna lain tidak ditampilkan atau dikirim.
-- Tombol Sync dan deteksi koneksi pulih mengirim payload ke `/{tenant_slug}/inbound/sync-offline`.
+- Mode default adalah manual: seluruh antrean inbound, outbound, transfer, dan opname dikirim melalui tombol "Sync Sekarang".
+- Pengaturan Profil menyediakan toggle "Sinkronisasi Otomatis". Jika aktif, antrean dikirim ketika koneksi internet tersedia; jika dinyalakan saat online, antrean yang sudah ada langsung dicoba.
 - Jika gagal → status `ERROR` dan pesan tersimpan; retry memakai ID lokal yang sama.
 - Agar retry tidak membuat manifes duplikat, backend wajib memproses `local_uuid` secara idempoten dan menegakkan keunikan setidaknya pada scope tenant.
-- Queue offline untuk outbound, opname, dan transfer masih memerlukan integrasi endpoint masing-masing.
+- Pilihan sinkronisasi otomatis tersimpan lokal dan mati secara default.
 
 ---
 
@@ -611,6 +612,7 @@ class ReconciliationItem {
 - Nama user + tenant name
 - Stats ringkas: Total Pengiriman diproses | SKU Entry | Shift aktif
 - Button: "Edit Profile →"
+- Toggle: "Sinkronisasi Otomatis" (mati secara default; antrean akan dikirim saat internet tersedia jika diaktifkan)
 - Button: "Keluar (Logout)" — warna danger, konfirmasi dialog dulu
 
 ---

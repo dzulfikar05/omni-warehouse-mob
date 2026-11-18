@@ -521,55 +521,43 @@ Struktur **identik dengan Inbound** dengan perubahan:
 
 ### 7.9 Stock Transfer (`/transfer`)
 **List Screen:**
-- Daftar transfer pending/in-progress
-- Card: SKU asal + Rak Asal → Rak Tujuan + qty + status
+- Daftar transfer lokal dan status sinkronisasi; antrean tetap tersimpan sampai backend mengonfirmasi sukses
 
 **Form Screen:**
-- Pilih SKU (autocomplete/search)
-- Auto-fill Rak Asal dari data stok SKU
-- Pilih Rak Tujuan (dropdown, exclude rak asal)
-- Input Qty (max = stok tersedia di rak asal, real-time warning jika exceed)
-- Notes optional
-- Button: "Proses Transfer →" → konfirmasi dialog → eksekusi
+- Muat SKU dan lokasi dari endpoint options; gunakan ID lokasi, bukan kode rak yang bisa ambigu
+- Setiap item harus memiliki `sku_id`, `from_location_id`, `to_location_id`, dan `quantity` minimal 1
+- Catatan, batch, dan tanggal kedaluwarsa bersifat opsional; backend tetap menentukan stok yang dipindahkan dengan FEFO
 
-**Scanner Screen:**
-- Scan barcode SKU → auto-fill form
-- Lalu konfirmasi manual qty dan rak tujuan
-
-> **Catatan**: Stock Transfer di mobile adalah **single item** per transaksi (berbeda dengan web yang bisa batch). Ergonomi mobile tidak cocok untuk multi-row form kompleks.
+Transfer offline memiliki kode lokal `TRF-YYYYMMDD-XXXX` dan UUID sinkronisasi terpisah, beserta item, lokasi, kuantitas, catatan, dan waktu pembuatan. Retry memakai UUID yang sama; backend mengeksekusi transfer saat sync dan respons `already_synced` menandakan retry idempoten. Error validasi atau koneksi tidak menghapus antrean.
 
 ---
 
 ### 7.10 Stock Opname (`/opname`)
 **List Screen:**
-- Session aktif (jika ada) → tampil progress besar
-- History session selesai
+- Tampilkan semua sesi dengan progress, status, gudang, lokasi/rak, auditor, dan waktu pembuatan
+- Gunakan pagination backend dan buka detail sesi berdasarkan `session_id`
+- Tidak ada endpoint pembuatan sesi; jangan membuat sesi lewat API
 
 **Scanner Screen (Offline-first):**
 - Tampilkan list item per rak yang perlu dihitung
 - Scan barcode item → auto-match ke daftar opname session
 - Input: Physical Qty (stepper: + dan -)
-- Status per item: ⬜ Belum | ✅ Match | 🔴 Defisit | 🟡 Surplus
-- Data tersimpan **offline dulu** (Isar) → sync ke server saat online
+- Blind count: jangan meminta atau menampilkan stok sistem maupun variance
+- Gunakan `location_id` dan rak sebagai lingkup hitung; tampilkan `location_label` untuk informasi lokasi. `zone` hanya kompatibilitas sesi lama.
+- Sesi yang terikat ke lokasi harus tetap dihitung pada `session.location_id`. Untuk sesi semua lokasi, setiap hitungan harus menyertakan lokasi dan rak.
+- Sesi yang ditutup atau disesuaikan tidak menerima hitungan baru
+- Data tersimpan lokal saat offline lalu dikirim melalui `sync-offline`
 - Progress bar: `X dari Y item terhitung`
 
-**Data Model (dari web types):**
-```dart
-class ReconciliationItem {
-  final int id;
-  final String sku;
-  final String barcode;
-  final String name;
-  final String batch;
-  final String rack;
-  final int systemQty;
-  int physicalQty;        // diisi operator
-  final String unit;
-  int variance;           // dihitung otomatis
-  String status;          // 'Match' | 'Defisit' | 'Surplus'
-  String? notes;
-}
-```
+**API yang tersedia (relatif terhadap prefix API):**
+- `GET /{tenant_slug}/stock-opname` — daftar seluruh status dengan pagination
+- `GET /{tenant_slug}/stock-opname/sessions/{session_id}` — detail sesi dan item
+- `GET /{tenant_slug}/stock-opname/active` — sesi terbaru, atau sesi tertentu dengan query `session_id`; respons memuat `data.session` dan `data.items`
+- `POST /{tenant_slug}/stock-opname/record-count` — hitung via `item_id` atau scan via identitas sesi dan `barcode`; mendukung `location_id` dan `target_rack`
+- `POST /{tenant_slug}/stock-opname/sync-offline` — identitas sesi dan daftar item, masing-masing wajib memiliki `physical_qty`
+- `POST /{tenant_slug}/stock-opname/submit-review` — identitas sesi berupa `session_id` atau `session_code`
+
+Jangan mengarang endpoint daftar/buat sesi atau field payload. Tampilkan error validasi server, termasuk HTTP 422, kepada operator.
 
 ---
 
@@ -693,13 +681,16 @@ POST  /api/tenant/{slug}/transactions/outbound/packing
 POST  /api/tenant/{slug}/transactions/outbound/commit
 
 STOCK TRANSFER:
-GET   /api/tenant/{slug}/transactions/stock-transfer
-POST  /api/tenant/{slug}/transactions/stock-transfer     ← buat transfer
+GET   /{tenant_slug}/stock-transfer/options
+POST  /{tenant_slug}/stock-transfer/sync-offline
 
 STOCK OPNAME:
-GET   /api/tenant/{slug}/stock-opname/active-session
-POST  /api/tenant/{slug}/stock-opname/verify-count      ← update physical qty
-POST  /api/tenant/{slug}/stock-opname/execute-adjustment
+GET   /{tenant_slug}/stock-opname
+GET   /{tenant_slug}/stock-opname/sessions/{session_id}
+GET   /{tenant_slug}/stock-opname/active
+POST  /{tenant_slug}/stock-opname/record-count
+POST  /{tenant_slug}/stock-opname/sync-offline
+POST  /{tenant_slug}/stock-opname/submit-review
 
 PRODUCT LOOKUP:
 GET   /api/tenant/{slug}/products/lookup?barcode={barcode}
@@ -709,7 +700,7 @@ GET   /api/tenant/{slug}/profile
 PUT   /api/tenant/{slug}/profile
 ```
 
-> **Catatan**: Endpoint-endpoint di atas BELUM ADA di backend saat ini (backend masih Inertia/web-only). Endpoint ini perlu dibuat terpisah sebagai API routes. Mobile agent tidak perlu membuat backend — cukup buat **mock data layer** di repository untuk development awal.
+> **Catatan**: Ikuti kontrak API backend yang tersedia. Jangan membuat endpoint atau payload baru untuk menutup endpoint yang belum tersedia.
 
 ### 9.3 Mock Data untuk Development
 Saat API belum ada, semua repository gunakan **hardcoded mock data** dengan interface yang sudah siap diganti real API. Gunakan pola:

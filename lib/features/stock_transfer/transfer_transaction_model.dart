@@ -42,15 +42,14 @@ class TransferLocation {
     final warehouse = _asMap(json['warehouse']);
     return TransferLocation(
       id: _asInt(json['id']),
-      name: (json['rack_code'] ??
-              json['location_code'] ??
-              json['name'] ??
-              json['code'] ??
-              '')
-          .toString(),
-      warehouseId: _asNullableInt(
-        json['warehouse_id'] ?? warehouse?['id'],
-      ),
+      name:
+          (json['rack_code'] ??
+                  json['location_code'] ??
+                  json['name'] ??
+                  json['code'] ??
+                  '')
+              .toString(),
+      warehouseId: _asNullableInt(json['warehouse_id'] ?? warehouse?['id']),
       warehouseName: (json['warehouse_name'] ?? warehouse?['name'])?.toString(),
       stockQuantity: _asNullableInt(
         json['stock_quantity'] ??
@@ -85,15 +84,16 @@ class TransferSku {
 
   factory TransferSku.fromJson(Map<String, dynamic> json) {
     final product = _asMap(json['product']) ?? const <String, dynamic>{};
-    final rawStock = json['available_stock'] ??
+    final rawStock =
+        json['available_stock'] ??
         json['available_quantity'] ??
         json['stock_available'] ??
         json['stock'] ??
         json['quantity_available'];
     return TransferSku(
       id: _asInt(json['sku_id'] ?? json['id']),
-      code:
-          (json['sku'] ?? json['sku_code'] ?? product['sku'] ?? '').toString(),
+      code: (json['sku'] ?? json['sku_code'] ?? product['sku'] ?? '')
+          .toString(),
       name: (json['name'] ?? json['product_name'] ?? product['name'] ?? '')
           .toString(),
       barcode: (json['barcode'] ?? product['barcode'] ?? '').toString(),
@@ -139,39 +139,43 @@ class TransferTransactionLine {
     final to = _asMap(json['to_location'] ?? json['destination_location']);
     return TransferTransactionLine(
       skuId: _asInt(json['sku_id'] ?? skuObject['id']),
-      sku: (json['sku_code'] ??
-              json['sku_name'] ??
-              (json['sku'] is String ? json['sku'] : null) ??
-              skuObject['sku'] ??
-              product['sku'] ??
-              '')
-          .toString(),
-      productName: (json['product_name'] ??
-              json['name'] ??
-              skuObject['name'] ??
-              product['name'] ??
-              'Produk')
-          .toString(),
-      fromLocation: (json['from_location_name'] ??
-              json['source_location_name'] ??
-              from?['rack_code'] ??
-              from?['name'] ??
-              (json['from_location'] is String
-                  ? json['from_location']
-                  : null) ??
-              '')
-          .toString(),
-      toLocation: (json['to_location_name'] ??
-              json['destination_location_name'] ??
-              to?['rack_code'] ??
-              to?['name'] ??
-              (json['to_location'] is String ? json['to_location'] : null) ??
-              '')
-          .toString(),
+      sku:
+          (json['sku_code'] ??
+                  json['sku_name'] ??
+                  (json['sku'] is String ? json['sku'] : null) ??
+                  skuObject['sku'] ??
+                  product['sku'] ??
+                  '')
+              .toString(),
+      productName:
+          (json['product_name'] ??
+                  json['name'] ??
+                  skuObject['name'] ??
+                  product['name'] ??
+                  'Produk')
+              .toString(),
+      fromLocation:
+          (json['from_location_name'] ??
+                  json['source_location_name'] ??
+                  from?['rack_code'] ??
+                  from?['name'] ??
+                  (json['from_location'] is String
+                      ? json['from_location']
+                      : null) ??
+                  '')
+              .toString(),
+      toLocation:
+          (json['to_location_name'] ??
+                  json['destination_location_name'] ??
+                  to?['rack_code'] ??
+                  to?['name'] ??
+                  (json['to_location'] is String
+                      ? json['to_location']
+                      : null) ??
+                  '')
+              .toString(),
       quantity: _asInt(json['quantity'] ?? json['qty']),
-      fromLocationId: _asNullableInt(
-        json['from_location_id'] ?? from?['id'],
-      ),
+      fromLocationId: _asNullableInt(json['from_location_id'] ?? from?['id']),
       toLocationId: _asNullableInt(json['to_location_id'] ?? to?['id']),
       batchNumber: json['batch_number']?.toString(),
       expiryDate: json['expiry_date']?.toString(),
@@ -208,41 +212,47 @@ class TransferTransaction {
   int get totalItems => itemCount ?? items.length;
   int get units =>
       totalQuantity ?? items.fold(0, (total, item) => total + item.quantity);
-  bool get canCancel =>
-      status.toLowerCase() != 'cancelled' && status.toLowerCase() != 'canceled';
+  bool get canCancel {
+    final normalizedStatus = status.toLowerCase();
+    return normalizedStatus != 'cancelled' &&
+        normalizedStatus != 'canceled' &&
+        !(isOfflinePending &&
+            (normalizedStatus == 'error' || normalizedStatus == 'syncing'));
+  }
+
   bool get isEditable =>
-      status.toLowerCase() == 'draft' ||
-      status.toLowerCase() == 'pending' ||
-      (isOfflinePending && status.toLowerCase() == 'error');
+      status.toLowerCase() == 'draft' || status.toLowerCase() == 'pending';
 
   factory TransferTransaction.fromJson(Map<String, dynamic> json) {
     final rawItems = json['items'] ?? json['details'] ?? json['lines'];
     final items = rawItems is List
         ? rawItems
-            .whereType<Map>()
-            .map(
-              (item) => TransferTransactionLine.fromJson(
-                Map<String, dynamic>.from(item),
-              ),
-            )
-            .toList()
+              .whereType<Map>()
+              .map(
+                (item) => TransferTransactionLine.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList()
         : <TransferTransactionLine>[];
     final user = _asMap(json['creator'] ?? json['user']);
     return TransferTransaction(
-      code: (json['transfer_code'] ??
-              json['reference_number'] ??
-              json['code'] ??
-              json['transaction_code'] ??
-              '')
-          .toString(),
+      code:
+          (json['transfer_code'] ??
+                  json['reference_number'] ??
+                  json['code'] ??
+                  json['transaction_code'] ??
+                  '')
+              .toString(),
       status: (json['status'] ?? 'pending').toString(),
       createdAt: (json['created_at'] ?? json['createdAt'] ?? '').toString(),
       items: items,
-      creator: (json['created_by_name'] ??
-              json['operator_name'] ??
-              user?['name'] ??
-              '')
-          .toString(),
+      creator:
+          (json['created_by_name'] ??
+                  json['operator_name'] ??
+                  user?['name'] ??
+                  '')
+              .toString(),
       notes: json['notes']?.toString(),
       itemCount: _asNullableInt(
         json['total_items'] ?? json['item_count'] ?? json['total_skus'],

@@ -6,12 +6,36 @@ import '../../core/theme/app_colors.dart';
 import 'stock_opname_model.dart';
 import 'stock_opname_repository.dart';
 
-class StockOpnameScreen extends ConsumerWidget {
+class StockOpnameScreen extends ConsumerStatefulWidget {
   const StockOpnameScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sessionState = ref.watch(stockOpnameRepositoryProvider);
+  ConsumerState<StockOpnameScreen> createState() => _StockOpnameScreenState();
+}
+
+class _StockOpnameScreenState extends ConsumerState<StockOpnameScreen> {
+  bool _loadingMore = false;
+  String? _loadMoreError;
+
+  Future<void> _loadMore() async {
+    if (_loadingMore) return;
+    setState(() {
+      _loadingMore = true;
+      _loadMoreError = null;
+    });
+    final notifier = ref.read(stockOpnameSessionListProvider.notifier);
+    await notifier.loadMore();
+    if (!mounted) return;
+    setState(() {
+      _loadingMore = false;
+      _loadMoreError = notifier.loadMoreError;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sessionsState = ref.watch(stockOpnameSessionListProvider);
+    final sessionsNotifier = ref.read(stockOpnameSessionListProvider.notifier);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -21,33 +45,77 @@ class StockOpnameScreen extends ConsumerWidget {
         elevation: 0,
         actions: [
           IconButton(
-            tooltip: 'Muat ulang sesi',
-            onPressed: () => ref
-                .read(stockOpnameRepositoryProvider.notifier)
-                .loadActiveSession(),
+            tooltip: 'Muat ulang daftar sesi',
+            onPressed: sessionsNotifier.loadFirstPage,
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: sessionState.when(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: sessionsState.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => _MessageState(
-              icon: Icons.error_outline_rounded,
+            error: (error, _) => _ListMessage(
               message: error.toString(),
-              actionLabel: 'Coba lagi',
-              onAction: () => ref
-                  .read(stockOpnameRepositoryProvider.notifier)
-                  .loadActiveSession(),
+              onRetry: sessionsNotifier.loadFirstPage,
             ),
-            data: (session) => session == null
-                ? const _MessageState(
-                    icon: Icons.inventory_2_outlined,
-                    message: 'Tidak ada sesi stock opname aktif.',
-                  )
-                : _ActiveSessionView(session: session),
+            data: (page) => page.sessions.isEmpty
+                ? const _ListMessage(message: 'Belum ada sesi stock opname.')
+                : RefreshIndicator(
+                    onRefresh: sessionsNotifier.loadFirstPage,
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Text(
+                          '${page.total} sesi stock opname',
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        ...page.sessions.map(
+                          (session) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _SessionCard(
+                              session: session,
+                              onTap: () => context.push(
+                                '/more/opname/${Uri.encodeComponent(session.sessionCode)}'
+                                '?session_id=${session.id}',
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_loadMoreError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              _loadMoreError!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: AppColors.danger,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        if (page.hasMore)
+                          OutlinedButton(
+                            onPressed: _loadingMore ? null : _loadMore,
+                            child: _loadingMore
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('Muat lainnya'),
+                          ),
+                      ],
+                    ),
+                  ),
           ),
         ),
       ),
@@ -55,328 +123,202 @@ class StockOpnameScreen extends ConsumerWidget {
   }
 }
 
-class _ActiveSessionView extends StatelessWidget {
-  const _ActiveSessionView({required this.session});
+class _SessionCard extends StatelessWidget {
+  const _SessionCard({required this.session, required this.onTap});
 
-  final StockOpnameSession session;
-
-  @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _SessionHeader(session: session),
-          if (session.isOfflinePending) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.warningLight,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.warningBorder),
-              ),
-              child: Text(
-                session.syncError == null
-                    ? 'Hitungan tersimpan lokal dan menunggu sinkronisasi.'
-                    : 'Sync opname gagal: ${session.syncError}',
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primaryBorder),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.visibility_off_outlined, color: AppColors.primary),
-                SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    'Blind count aktif. Stok sistem disembunyikan saat penghitungan.',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'ITEM OPNAME (${session.items.length})',
-            style: const TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (session.items.isEmpty)
-            const _EmptyItemsCard()
-          else
-            ...session.items.map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 9),
-                child: _OpnameItemTile(item: item),
-              ),
-            ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: session.isInReview
-                ? null
-                : () => context.push('/more/opname/${session.sessionCode}'),
-            icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: const Text('Mulai hitung dengan scanner'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
-              backgroundColor: AppColors.primary,
-            ),
-          ),
-        ],
-      );
-}
-
-class _SessionHeader extends StatelessWidget {
-  const _SessionHeader({required this.session});
-
-  final StockOpnameSession session;
+  final StockOpnameSessionSummary session;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'SESI OPNAME AKTIF',
-              style: TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              session.sessionCode,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontFamily: 'RobotoMono',
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _InfoLine(label: 'Gudang', value: session.warehouse),
-            const SizedBox(height: 5),
-            _InfoLine(label: 'Zona', value: session.zone),
-            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    '${session.countedItems}/${session.items.length} item dihitung',
+                    session.sessionCode,
                     style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                      fontFamily: 'RobotoMono',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
-                Text(
-                  '${(session.progress * 100).round()}%',
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                _StatusChip(status: session.status),
               ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '${session.countedItems}/${session.totalItems} item dihitung',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 6),
             ClipRRect(
               borderRadius: BorderRadius.circular(99),
               child: LinearProgressIndicator(
-                value: session.progress,
-                minHeight: 6,
+                value: session.progress.clamp(0, 1),
+                minHeight: 5,
                 backgroundColor: AppColors.surfaceAlt,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _SessionInfo(label: 'Gudang', value: _warehouseLabel),
+            const SizedBox(height: 4),
+            _SessionInfo(
+              label: 'Lokasi',
+              value: session.locationLabel.isEmpty
+                  ? 'Semua lokasi'
+                  : session.locationLabel,
+            ),
+            if (session.auditorName.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              _SessionInfo(label: 'Auditor', value: session.auditorName),
+            ],
+            if (session.createdAt.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              _SessionInfo(
+                label: 'Dibuat',
+                value: _formatCreatedAt(session.createdAt),
+              ),
+            ],
+            const SizedBox(height: 10),
+            const Align(
+              alignment: Alignment.centerRight,
+              child: Icon(
+                Icons.chevron_right_rounded,
                 color: AppColors.primary,
               ),
             ),
           ],
         ),
-      );
+      ),
+    ),
+  );
+
+  String get _warehouseLabel => session.warehouseCode.isEmpty
+      ? session.warehouseName
+      : '${session.warehouseName} (${session.warehouseCode})';
 }
 
-class _InfoLine extends StatelessWidget {
-  const _InfoLine({required this.label, required this.value});
+class _SessionInfo extends StatelessWidget {
+  const _SessionInfo({required this.label, required this.value});
 
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 62,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-            ),
+    children: [
+      SizedBox(
+        width: 64,
+        child: Text(
+          label,
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
+        ),
+      ),
+      Expanded(
+        child: Text(
+          value.isEmpty ? '-' : value,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
           ),
-          Expanded(
-            child: Text(
-              value.isEmpty ? '-' : value,
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 }
 
-class _OpnameItemTile extends StatelessWidget {
-  const _OpnameItemTile({required this.item});
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
 
-  final StockOpnameItem item;
+  final String status;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
+  Widget build(BuildContext context) {
+    final normalized = status.toUpperCase();
+    final color = switch (normalized) {
+      'DRAFT' => AppColors.textMuted,
+      'COUNTING' || 'ACTIVE' => AppColors.primary,
+      'REVIEW' => AppColors.warning,
+      'ADJUSTED' => AppColors.success,
+      _ => AppColors.textSecondary,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(
+        normalized,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(
-              Icons.inventory_2_outlined,
-              size: 20,
-              color: AppColors.primary,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.sku,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontFamily: 'RobotoMono',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    item.name,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'Rak: ${item.targetRack.isEmpty ? '-' : item.targetRack}',
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              item.physicalQty == null
-                  ? 'Belum dihitung'
-                  : '${item.physicalQty}',
-              style: TextStyle(
-                color: item.physicalQty == null
-                    ? AppColors.textMuted
-                    : AppColors.success,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      );
+      ),
+    );
+  }
 }
 
-class _EmptyItemsCard extends StatelessWidget {
-  const _EmptyItemsCard();
+class _ListMessage extends StatelessWidget {
+  const _ListMessage({required this.message, this.onRetry});
 
-  @override
-  Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(
-          child: Text(
-            'Belum ada SKU pada sesi ini.',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-          ),
-        ),
-      );
-}
-
-class _MessageState extends StatelessWidget {
-  const _MessageState({
-    required this.icon,
-    required this.message,
-    this.actionLabel,
-    this.onAction,
-  });
-
-  final IconData icon;
   final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
+  final VoidCallback? onRetry;
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 44, color: AppColors.textMuted),
-              const SizedBox(height: 12),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                ),
-              ),
-              if (actionLabel != null && onAction != null) ...[
-                const SizedBox(height: 14),
-                OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
-              ],
-            ],
+  Widget build(BuildContext context) => ListView(
+    physics: const AlwaysScrollableScrollPhysics(),
+    padding: const EdgeInsets.all(24),
+    children: [
+      const SizedBox(height: 140),
+      Icon(
+        onRetry == null ? Icons.inventory_2_outlined : Icons.error_outline,
+        size: 44,
+        color: AppColors.textMuted,
+      ),
+      const SizedBox(height: 12),
+      Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+      ),
+      if (onRetry != null) ...[
+        const SizedBox(height: 14),
+        Center(
+          child: OutlinedButton(
+            onPressed: onRetry,
+            child: const Text('Coba lagi'),
           ),
         ),
-      );
+      ],
+    ],
+  );
+}
+
+String _formatCreatedAt(String value) {
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return value;
+  final local = parsed.toLocal();
+  String twoDigits(int number) => number.toString().padLeft(2, '0');
+  return '${twoDigits(local.day)}/${twoDigits(local.month)}/${local.year} '
+      '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
 }

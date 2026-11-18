@@ -27,13 +27,15 @@ class OfflineDb {
       throw UnsupportedError('Offline SQLite is not supported on web.');
     }
 
-    final selectedFactory = factory ??
+    final selectedFactory =
+        factory ??
         (defaultTargetPlatform == TargetPlatform.android ||
                 defaultTargetPlatform == TargetPlatform.iOS ||
                 defaultTargetPlatform == TargetPlatform.macOS
             ? sqflite.databaseFactory
             : _ffiDatabaseFactory());
-    final resolvedPath = databasePath ??
+    final resolvedPath =
+        databasePath ??
         path.join(await selectedFactory.getDatabasesPath(), 'omni_offline.db');
 
     _database = await selectedFactory.openDatabase(
@@ -95,12 +97,6 @@ class OfflineDb {
       whereArgs: ['syncing'],
     );
     await database.update(
-      'transfer_offline_queue',
-      {'status': 'pending'},
-      where: 'status = ?',
-      whereArgs: ['syncing'],
-    );
-    await database.update(
       'opname_offline_queue',
       {'status': 'pending'},
       where: 'status = ?',
@@ -138,9 +134,7 @@ class OfflineDb {
     ''');
   }
 
-  static Future<void> _createTransferTables(
-    sqflite.DatabaseExecutor db,
-  ) async {
+  static Future<void> _createTransferTables(sqflite.DatabaseExecutor db) async {
     await db.execute('''
       CREATE TABLE transfer_offline_queue (
         local_uuid TEXT PRIMARY KEY,
@@ -170,9 +164,7 @@ class OfflineDb {
     ''');
   }
 
-  static Future<void> _createOpnameTables(
-    sqflite.DatabaseExecutor db,
-  ) async {
+  static Future<void> _createOpnameTables(sqflite.DatabaseExecutor db) async {
     await db.execute('''
       CREATE TABLE opname_offline_queue (
         local_uuid TEXT PRIMARY KEY,
@@ -208,9 +200,7 @@ class OfflineDb {
     ''');
   }
 
-  static Future<void> _createSettingsTable(
-    sqflite.DatabaseExecutor db,
-  ) async {
+  static Future<void> _createSettingsTable(sqflite.DatabaseExecutor db) async {
     await db.execute('''
       CREATE TABLE app_settings (
         setting_key TEXT PRIMARY KEY,
@@ -231,14 +221,10 @@ class OfflineDb {
   }
 
   static Future<void> setAutomaticSyncEnabled(bool enabled) async {
-    await database.insert(
-      'app_settings',
-      {
-        'setting_key': _automaticSyncSettingKey,
-        'setting_value': enabled ? 'true' : 'false',
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await database.insert('app_settings', {
+      'setting_key': _automaticSyncSettingKey,
+      'setting_value': enabled ? 'true' : 'false',
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static DatabaseFactory _ffiDatabaseFactory() {
@@ -263,15 +249,12 @@ class OfflineDb {
     required String ownerKey,
     required Map<String, dynamic> options,
   }) async {
-    await database.insert(
-        'inbound_master_cache',
-        {
-          'tenant_slug': tenantSlug,
-          'owner_key': ownerKey,
-          'options_json': jsonEncodeMap(options),
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await database.insert('inbound_master_cache', {
+      'tenant_slug': tenantSlug,
+      'owner_key': ownerKey,
+      'options_json': jsonEncodeMap(options),
+      'updated_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<Map<String, dynamic>?> getCachedInboundOptions({
@@ -296,35 +279,31 @@ class OfflineDb {
     required Map<String, dynamic> payload,
     required Map<String, dynamic> metadata,
   }) async {
-    await database.insert(
-        'inbound_offline_queue',
-        {
-          'local_uuid': localUuid,
-          'tenant_slug': tenantSlug,
-          'owner_key': ownerKey,
-          'payload_json': jsonEncodeMap(payload),
-          'metadata_json': jsonEncodeMap(metadata),
-          'created_at': DateTime.now().toIso8601String(),
-          'status': 'pending',
-        },
-        conflictAlgorithm: ConflictAlgorithm.abort);
+    await database.insert('inbound_offline_queue', {
+      'local_uuid': localUuid,
+      'tenant_slug': tenantSlug,
+      'owner_key': ownerKey,
+      'payload_json': jsonEncodeMap(payload),
+      'metadata_json': jsonEncodeMap(metadata),
+      'created_at': DateTime.now().toIso8601String(),
+      'status': 'pending',
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
   }
 
   static Future<List<Map<String, Object?>>> getInboundQueue({
     required String tenantSlug,
     required String ownerKey,
     String? localUuid,
-  }) =>
-      database.query(
-        'inbound_offline_queue',
-        where: localUuid == null
-            ? 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)'
-            : 'tenant_slug = ? AND owner_key = ? AND local_uuid = ? AND status IN (?, ?, ?)',
-        whereArgs: localUuid == null
-            ? [tenantSlug, ownerKey, 'pending', 'error', 'syncing']
-            : [tenantSlug, ownerKey, localUuid, 'pending', 'error', 'syncing'],
-        orderBy: 'created_at ASC',
-      );
+  }) => database.query(
+    'inbound_offline_queue',
+    where: localUuid == null
+        ? 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)'
+        : 'tenant_slug = ? AND owner_key = ? AND local_uuid = ? AND status IN (?, ?, ?)',
+    whereArgs: localUuid == null
+        ? [tenantSlug, ownerKey, 'pending', 'error', 'syncing']
+        : [tenantSlug, ownerKey, localUuid, 'pending', 'error', 'syncing'],
+    orderBy: 'created_at ASC',
+  );
 
   static Future<int> countInboundQueue({
     required String tenantSlug,
@@ -344,13 +323,12 @@ class OfflineDb {
   static Future<List<Map<String, Object?>>> getInboundManifests({
     required String tenantSlug,
     required String ownerKey,
-  }) =>
-      database.query(
-        'inbound_offline_queue',
-        where: 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)',
-        whereArgs: [tenantSlug, ownerKey, 'pending', 'error', 'syncing'],
-        orderBy: 'created_at DESC',
-      );
+  }) => database.query(
+    'inbound_offline_queue',
+    where: 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)',
+    whereArgs: [tenantSlug, ownerKey, 'pending', 'error', 'syncing'],
+    orderBy: 'created_at DESC',
+  );
 
   static Future<Map<String, Object?>?> getInboundQueueItem({
     required String localUuid,
@@ -440,15 +418,12 @@ class OfflineDb {
     required String ownerKey,
     required Map<String, dynamic> options,
   }) async {
-    await database.insert(
-        'outbound_master_cache',
-        {
-          'tenant_slug': tenantSlug,
-          'owner_key': ownerKey,
-          'options_json': jsonEncodeMap(options),
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await database.insert('outbound_master_cache', {
+      'tenant_slug': tenantSlug,
+      'owner_key': ownerKey,
+      'options_json': jsonEncodeMap(options),
+      'updated_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<Map<String, dynamic>?> getCachedOutboundOptions({
@@ -473,35 +448,31 @@ class OfflineDb {
     required Map<String, dynamic> payload,
     required Map<String, dynamic> metadata,
   }) async {
-    await database.insert(
-        'outbound_offline_queue',
-        {
-          'local_uuid': localUuid,
-          'tenant_slug': tenantSlug,
-          'owner_key': ownerKey,
-          'payload_json': jsonEncodeMap(payload),
-          'metadata_json': jsonEncodeMap(metadata),
-          'created_at': DateTime.now().toIso8601String(),
-          'status': 'pending',
-        },
-        conflictAlgorithm: ConflictAlgorithm.abort);
+    await database.insert('outbound_offline_queue', {
+      'local_uuid': localUuid,
+      'tenant_slug': tenantSlug,
+      'owner_key': ownerKey,
+      'payload_json': jsonEncodeMap(payload),
+      'metadata_json': jsonEncodeMap(metadata),
+      'created_at': DateTime.now().toIso8601String(),
+      'status': 'pending',
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
   }
 
   static Future<List<Map<String, Object?>>> getOutboundQueue({
     required String tenantSlug,
     required String ownerKey,
     String? localUuid,
-  }) =>
-      database.query(
-        'outbound_offline_queue',
-        where: localUuid == null
-            ? 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)'
-            : 'tenant_slug = ? AND owner_key = ? AND local_uuid = ? AND status IN (?, ?, ?)',
-        whereArgs: localUuid == null
-            ? [tenantSlug, ownerKey, 'pending', 'error', 'syncing']
-            : [tenantSlug, ownerKey, localUuid, 'pending', 'error', 'syncing'],
-        orderBy: 'created_at ASC',
-      );
+  }) => database.query(
+    'outbound_offline_queue',
+    where: localUuid == null
+        ? 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)'
+        : 'tenant_slug = ? AND owner_key = ? AND local_uuid = ? AND status IN (?, ?, ?)',
+    whereArgs: localUuid == null
+        ? [tenantSlug, ownerKey, 'pending', 'error', 'syncing']
+        : [tenantSlug, ownerKey, localUuid, 'pending', 'error', 'syncing'],
+    orderBy: 'created_at ASC',
+  );
 
   static Future<int> countOutboundQueue({
     required String tenantSlug,
@@ -521,13 +492,12 @@ class OfflineDb {
   static Future<List<Map<String, Object?>>> getOutboundManifests({
     required String tenantSlug,
     required String ownerKey,
-  }) =>
-      database.query(
-        'outbound_offline_queue',
-        where: 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)',
-        whereArgs: [tenantSlug, ownerKey, 'pending', 'error', 'syncing'],
-        orderBy: 'created_at DESC',
-      );
+  }) => database.query(
+    'outbound_offline_queue',
+    where: 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)',
+    whereArgs: [tenantSlug, ownerKey, 'pending', 'error', 'syncing'],
+    orderBy: 'created_at DESC',
+  );
 
   static Future<Map<String, Object?>?> getOutboundQueueItem({
     required String localUuid,
@@ -603,28 +573,24 @@ class OfflineDb {
     required String localUuid,
     required String tenantSlug,
     required String ownerKey,
-  }) =>
-      database.delete(
-        'outbound_offline_queue',
-        where:
-            'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status != ?',
-        whereArgs: [localUuid, tenantSlug, ownerKey, 'syncing'],
-      );
+  }) => database.delete(
+    'outbound_offline_queue',
+    where:
+        'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status != ?',
+    whereArgs: [localUuid, tenantSlug, ownerKey, 'syncing'],
+  );
 
   static Future<void> cacheTransferOptions({
     required String tenantSlug,
     required String ownerKey,
     required Map<String, dynamic> options,
   }) async {
-    await database.insert(
-        'transfer_master_cache',
-        {
-          'tenant_slug': tenantSlug,
-          'owner_key': ownerKey,
-          'options_json': jsonEncodeMap(options),
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await database.insert('transfer_master_cache', {
+      'tenant_slug': tenantSlug,
+      'owner_key': ownerKey,
+      'options_json': jsonEncodeMap(options),
+      'updated_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<Map<String, dynamic>?> getCachedTransferOptions({
@@ -648,36 +614,34 @@ class OfflineDb {
     required String ownerKey,
     required Map<String, dynamic> payload,
     required Map<String, dynamic> metadata,
+    DateTime? createdAt,
   }) async {
-    await database.insert(
-        'transfer_offline_queue',
-        {
-          'local_uuid': localUuid,
-          'tenant_slug': tenantSlug,
-          'owner_key': ownerKey,
-          'payload_json': jsonEncodeMap(payload),
-          'metadata_json': jsonEncodeMap(metadata),
-          'created_at': DateTime.now().toIso8601String(),
-          'status': 'pending',
-        },
-        conflictAlgorithm: ConflictAlgorithm.abort);
+    final timestamp = (createdAt ?? DateTime.now()).toIso8601String();
+    await database.insert('transfer_offline_queue', {
+      'local_uuid': localUuid,
+      'tenant_slug': tenantSlug,
+      'owner_key': ownerKey,
+      'payload_json': jsonEncodeMap(payload),
+      'metadata_json': jsonEncodeMap(metadata),
+      'created_at': timestamp,
+      'status': 'pending',
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
   }
 
   static Future<List<Map<String, Object?>>> getTransferQueue({
     required String tenantSlug,
     required String ownerKey,
     String? localUuid,
-  }) =>
-      database.query(
-        'transfer_offline_queue',
-        where: localUuid == null
-            ? 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)'
-            : 'tenant_slug = ? AND owner_key = ? AND local_uuid = ? AND status IN (?, ?, ?)',
-        whereArgs: localUuid == null
-            ? [tenantSlug, ownerKey, 'pending', 'error', 'syncing']
-            : [tenantSlug, ownerKey, localUuid, 'pending', 'error', 'syncing'],
-        orderBy: 'created_at ASC',
-      );
+  }) => database.query(
+    'transfer_offline_queue',
+    where: localUuid == null
+        ? 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)'
+        : 'tenant_slug = ? AND owner_key = ? AND local_uuid = ? AND status IN (?, ?, ?)',
+    whereArgs: localUuid == null
+        ? [tenantSlug, ownerKey, 'pending', 'error', 'syncing']
+        : [tenantSlug, ownerKey, localUuid, 'pending', 'error', 'syncing'],
+    orderBy: 'created_at ASC',
+  );
 
   static Future<int> countTransferQueue({
     required String tenantSlug,
@@ -697,20 +661,20 @@ class OfflineDb {
   static Future<List<Map<String, Object?>>> getTransferManifests({
     required String tenantSlug,
     required String ownerKey,
-  }) =>
-      database.query(
-        'transfer_offline_queue',
-        where: 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?, ?)',
-        whereArgs: [
-          tenantSlug,
-          ownerKey,
-          'pending',
-          'error',
-          'syncing',
-          'cancelled'
-        ],
-        orderBy: 'created_at DESC',
-      );
+  }) => database.query(
+    'transfer_offline_queue',
+    where: 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?, ?, ?)',
+    whereArgs: [
+      tenantSlug,
+      ownerKey,
+      'pending',
+      'error',
+      'syncing',
+      'success',
+      'cancelled',
+    ],
+    orderBy: 'created_at DESC',
+  );
 
   static Future<Map<String, Object?>?> getTransferQueueItem({
     required String localUuid,
@@ -759,14 +723,29 @@ class OfflineDb {
     required String status,
     String? errorMessage,
     String? serverTransferCode,
+    String? serverStatus,
     bool incrementRetry = false,
   }) async {
+    String? metadataJson;
+    if (serverStatus != null) {
+      final row = await getTransferQueueItem(
+        localUuid: localUuid,
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      );
+      if (row != null) {
+        final metadata = decodeJsonMap(row['metadata_json'] as String)
+          ..['server_status'] = serverStatus;
+        metadataJson = jsonEncodeMap(metadata);
+      }
+    }
     await database.rawUpdate(
       '''
     UPDATE transfer_offline_queue
     SET status = ?,
         error_message = ?,
         server_transfer_code = COALESCE(?, server_transfer_code),
+        metadata_json = COALESCE(?, metadata_json),
         retry_count = retry_count + ?
     WHERE local_uuid = ? AND tenant_slug = ? AND owner_key = ?
     ''',
@@ -774,6 +753,7 @@ class OfflineDb {
         status,
         errorMessage,
         serverTransferCode,
+        metadataJson,
         incrementRetry ? 1 : 0,
         localUuid,
         tenantSlug,
@@ -805,13 +785,12 @@ class OfflineDb {
     required String localUuid,
     required String tenantSlug,
     required String ownerKey,
-  }) =>
-      database.delete(
-        'transfer_offline_queue',
-        where:
-            'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status != ?',
-        whereArgs: [localUuid, tenantSlug, ownerKey, 'syncing'],
-      );
+  }) => database.delete(
+    'transfer_offline_queue',
+    where:
+        'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status != ?',
+    whereArgs: [localUuid, tenantSlug, ownerKey, 'syncing'],
+  );
 
   static Future<void> cacheOpnameSession({
     required String tenantSlug,
@@ -819,17 +798,13 @@ class OfflineDb {
     required String sessionCode,
     required Map<String, dynamic> session,
   }) async {
-    await database.insert(
-      'opname_session_cache',
-      {
-        'tenant_slug': tenantSlug,
-        'owner_key': ownerKey,
-        'session_code': sessionCode,
-        'session_json': jsonEncodeMap(session),
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await database.insert('opname_session_cache', {
+      'tenant_slug': tenantSlug,
+      'owner_key': ownerKey,
+      'session_code': sessionCode,
+      'session_json': jsonEncodeMap(session),
+      'updated_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<Map<String, dynamic>?> getCachedOpnameSession({
@@ -852,6 +827,21 @@ class OfflineDb {
     return decodeJsonMap(rows.single['session_json'] as String);
   }
 
+  static Future<List<Map<String, dynamic>>> getCachedOpnameSessions({
+    required String tenantSlug,
+    required String ownerKey,
+  }) async {
+    final rows = await database.query(
+      'opname_session_cache',
+      where: 'tenant_slug = ? AND owner_key = ?',
+      whereArgs: [tenantSlug, ownerKey],
+      orderBy: 'updated_at DESC',
+    );
+    return rows
+        .map((row) => decodeJsonMap(row['session_json'] as String))
+        .toList();
+  }
+
   static Future<void> enqueueOpname({
     required String localUuid,
     required String tenantSlug,
@@ -861,57 +851,45 @@ class OfflineDb {
     required Map<String, dynamic> payload,
     required Map<String, dynamic> metadata,
   }) async {
-    await database.insert(
-      'opname_offline_queue',
-      {
-        'local_uuid': localUuid,
-        'tenant_slug': tenantSlug,
-        'owner_key': ownerKey,
-        'session_id': sessionId,
-        'session_code': sessionCode,
-        'payload_json': jsonEncodeMap(payload),
-        'metadata_json': jsonEncodeMap(metadata),
-        'created_at': DateTime.now().toIso8601String(),
-        'status': 'pending',
-      },
-      conflictAlgorithm: ConflictAlgorithm.abort,
-    );
+    await database.insert('opname_offline_queue', {
+      'local_uuid': localUuid,
+      'tenant_slug': tenantSlug,
+      'owner_key': ownerKey,
+      'session_id': sessionId,
+      'session_code': sessionCode,
+      'payload_json': jsonEncodeMap(payload),
+      'metadata_json': jsonEncodeMap(metadata),
+      'created_at': DateTime.now().toIso8601String(),
+      'status': 'pending',
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
   }
 
   static Future<List<Map<String, Object?>>> getOpnameQueue({
     required String tenantSlug,
     required String ownerKey,
     String? localUuid,
-  }) =>
-      database.query(
-        'opname_offline_queue',
-        where: localUuid == null
-            ? 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)'
-            : 'tenant_slug = ? AND owner_key = ? AND local_uuid = ? AND status IN (?, ?, ?)',
-        whereArgs: localUuid == null
-            ? [tenantSlug, ownerKey, 'pending', 'error', 'syncing']
-            : [tenantSlug, ownerKey, localUuid, 'pending', 'error', 'syncing'],
-        orderBy: 'created_at ASC',
-      );
+  }) => database.query(
+    'opname_offline_queue',
+    where: localUuid == null
+        ? 'tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)'
+        : 'tenant_slug = ? AND owner_key = ? AND local_uuid = ? AND status IN (?, ?, ?)',
+    whereArgs: localUuid == null
+        ? [tenantSlug, ownerKey, 'pending', 'error', 'syncing']
+        : [tenantSlug, ownerKey, localUuid, 'pending', 'error', 'syncing'],
+    orderBy: 'created_at ASC',
+  );
 
   static Future<List<Map<String, Object?>>> getPendingOpnameForSession({
     required String tenantSlug,
     required String ownerKey,
     required String sessionCode,
-  }) =>
-      database.query(
-        'opname_offline_queue',
-        where:
-            'tenant_slug = ? AND owner_key = ? AND session_code = ? AND status IN (?, ?)',
-        whereArgs: [
-          tenantSlug,
-          ownerKey,
-          sessionCode,
-          'pending',
-          'error',
-        ],
-        orderBy: 'created_at ASC',
-      );
+  }) => database.query(
+    'opname_offline_queue',
+    where:
+        'tenant_slug = ? AND owner_key = ? AND session_code = ? AND status IN (?, ?)',
+    whereArgs: [tenantSlug, ownerKey, sessionCode, 'pending', 'error'],
+    orderBy: 'created_at ASC',
+  );
 
   static Future<int> countOpnameQueue({
     required String tenantSlug,
@@ -981,17 +959,34 @@ class OfflineDb {
     }
   }
 
+  static Future<void> updateOpnameQueuePayload({
+    required String localUuid,
+    required String tenantSlug,
+    required String ownerKey,
+    required Map<String, dynamic> payload,
+  }) async {
+    final updated = await database.update(
+      'opname_offline_queue',
+      {'payload_json': jsonEncodeMap(payload)},
+      where:
+          'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status = ?',
+      whereArgs: [localUuid, tenantSlug, ownerKey, 'syncing'],
+    );
+    if (updated != 1) {
+      throw StateError('Antrean opname tidak tersedia untuk diperbarui.');
+    }
+  }
+
   static Future<int> deleteOpnameQueueItem({
     required String localUuid,
     required String tenantSlug,
     required String ownerKey,
-  }) =>
-      database.delete(
-        'opname_offline_queue',
-        where:
-            'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status != ?',
-        whereArgs: [localUuid, tenantSlug, ownerKey, 'syncing'],
-      );
+  }) => database.delete(
+    'opname_offline_queue',
+    where:
+        'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status != ?',
+    whereArgs: [localUuid, tenantSlug, ownerKey, 'syncing'],
+  );
 }
 
 String jsonEncodeMap(Map<String, dynamic> value) => jsonEncode(value);

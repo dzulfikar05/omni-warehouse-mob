@@ -21,7 +21,6 @@ import '../../features/scanner/generic_scanner_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/stock_opname/stock_opname_screen.dart';
 import '../../features/stock_opname/stock_opname_scanner_screen.dart';
-import '../../features/stock_transfer/transfer_scanner_screen.dart';
 import '../../features/stock_transfer/transfer_transaction_form_screen.dart';
 import '../../features/stock_transfer/transfer_transactions_screen.dart';
 import '../../features/stock_transfer/transfer_transaction_model.dart';
@@ -188,7 +187,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'scan',
-                    builder: (context, state) => const TransferScannerScreen(),
+                    builder: (context, state) =>
+                        const TransferTransactionFormScreen(),
                   ),
                 ],
               ),
@@ -200,6 +200,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: ':session_code',
                     builder: (context, state) => StockOpnameScannerScreen(
                       sessionCode: state.pathParameters['session_code']!,
+                      sessionId: int.tryParse(
+                        state.uri.queryParameters['session_id'] ?? '',
+                      ),
                     ),
                   ),
                 ],

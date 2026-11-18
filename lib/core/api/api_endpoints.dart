@@ -51,6 +51,9 @@ class ApiEndpoints {
       '/$slug/stock-transfer/$code/cancel';
 
   // STOCK OPNAME (AUDIT FISIK)
+  static String opnameList(String slug) => '/$slug/stock-opname';
+  static String opnameDetail(String slug, int sessionId) =>
+      '/$slug/stock-opname/sessions/$sessionId';
   static String opnameActiveSession(String slug) =>
       '/$slug/stock-opname/active';
   static String opnameSyncOffline(String slug) =>
@@ -60,8 +63,6 @@ class ApiEndpoints {
   static String opnameSubmitReview(String slug) =>
       '/$slug/stock-opname/submit-review';
   static String opnameVerifyCount(String slug) => opnameRecordCount(slug);
-  static String opnameExecute(String slug) =>
-      '/$slug/stock-opname/execute-adjustment';
 
   // PRODUCT LOOKUP
   static String productLookup(String slug) => '/$slug/products/lookup';

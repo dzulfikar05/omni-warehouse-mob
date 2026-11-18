@@ -50,6 +50,16 @@ class ApiTransferTransactionRepository
   final Dio _dio;
 
   AppException _mapFailure(DioException error, String fallback) {
+    if (error.error is ValidationException) {
+      final validation = error.error as ValidationException;
+      final details = validation.errors.values
+          .expand((messages) => messages)
+          .join(' ');
+      return ValidationException(
+        details.isEmpty ? validation.message : '${validation.message} $details',
+        errors: validation.errors,
+      );
+    }
     if (error.error is AppException) return error.error as AppException;
     if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.sendTimeout ||
@@ -57,7 +67,39 @@ class ApiTransferTransactionRepository
         error.type == DioExceptionType.connectionError) {
       return NetworkException(error.message ?? fallback);
     }
-    return ServerException(fallback);
+    final response = error.response;
+    final body = response?.data;
+    final responseMessage = body is Map ? body['message']?.toString() : null;
+    if (response?.statusCode == 422 && body is Map) {
+      final errors = <String, List<String>>{};
+      final rawErrors = body['errors'];
+      if (rawErrors is Map) {
+        rawErrors.forEach((key, value) {
+          if (value is List) {
+            errors[key.toString()] = value
+                .map((item) => item.toString())
+                .toList();
+          }
+        });
+      }
+      final details = errors.values.expand((messages) => messages).join(' ');
+      final message = responseMessage ?? 'Validasi gagal.';
+      return ValidationException(
+        details.isEmpty ? message : '$message $details',
+        errors: errors,
+      );
+    }
+    if (response?.statusCode == 401) {
+      return UnauthorizedException(
+        responseMessage ?? 'Sesi login berakhir. Silakan login kembali.',
+      );
+    }
+    if (response?.statusCode == 404) {
+      return ServerException(
+        responseMessage ?? 'Data transfer tidak ditemukan.',
+      );
+    }
+    return ServerException(responseMessage ?? fallback);
   }
 
   Map<String, dynamic> _asMap(dynamic value, String message) {
@@ -140,17 +182,19 @@ class ApiTransferTransactionRepository
       final rawTransactions = rawData is List
           ? rawData
           : data['transfers'] ??
-              data['transactions'] ??
-              data['transfer_logs'] ??
-              data['logs'] ??
-              data['stock_transfers'] ??
-              data['data'];
-      final transactions = _asList(
-        rawTransactions,
-        'transaksi mutasi stok',
-      ).whereType<Map>().map((item) {
-        return TransferTransaction.fromJson(Map<String, dynamic>.from(item));
-      }).toList();
+                data['transactions'] ??
+                data['transfer_logs'] ??
+                data['logs'] ??
+                data['stock_transfers'] ??
+                data['data'];
+      final transactions = _asList(rawTransactions, 'transaksi mutasi stok')
+          .whereType<Map>()
+          .map((item) {
+            return TransferTransaction.fromJson(
+              Map<String, dynamic>.from(item),
+            );
+          })
+          .toList();
       final rawStats = data['summary'] ?? data['stats'];
       final summary = rawStats is Map
           ? Map<String, dynamic>.from(rawStats)
@@ -265,7 +309,7 @@ class OfflineTransferTransactionRepository
         );
       }
       return options;
-    } on AppException {
+    } on NetworkException {
       final cached = await OfflineDb.getCachedTransferOptions(
         tenantSlug: slug,
         ownerKey: ownerKey,
@@ -306,10 +350,7 @@ class OfflineTransferTransactionRepository
       if (local.isEmpty) rethrow;
       return TransferTransactionListResult(
         transactions: local,
-        stats: TransferTransactionStats.fromJson(
-          const {},
-          transactions: local,
-        ),
+        stats: TransferTransactionStats.fromJson(const {}, transactions: local),
       );
     }
   }
@@ -320,23 +361,29 @@ class OfflineTransferTransactionRepository
     required List<Map<String, dynamic>> items,
     String? notes,
   }) async {
-    final localId = generateTransferLocalId();
+    final createdAt = DateTime.now();
+    final localId = generateTransferLocalId(createdAt);
+    final localUuid = generateTransferLocalUuid();
+    final normalizedItems = await _validatePayloadItems(slug, items);
     final payload = <String, dynamic>{
-      'transfer_code': localId,
-      'local_uuid': localId,
-      'transaction_uuid': localId,
-      'items': items,
+      'local_uuid': localUuid,
+      'transaction_uuid': localUuid,
+      'client_timestamp': createdAt.toIso8601String(),
+      'items': normalizedItems,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     };
+    final metadata = await _metadataForPayload(slug, payload)
+      ..['local_id'] = localId;
     await OfflineDb.enqueueTransfer(
-      localUuid: localId,
+      localUuid: localUuid,
       tenantSlug: slug,
       ownerKey: ownerKey,
       payload: payload,
-      metadata: await _metadataForPayload(slug, payload),
+      metadata: metadata,
+      createdAt: createdAt,
     );
-    await _trySync(slug, localId);
-    return localId;
+    await _trySync(slug, localUuid);
+    return localUuid;
   }
 
   @override
@@ -352,12 +399,7 @@ class OfflineTransferTransactionRepository
       ownerKey: ownerKey,
     );
     if (row == null) {
-      await api.updateTransaction(
-        slug,
-        code,
-        items: items,
-        notes: notes,
-      );
+      await api.updateTransaction(slug, code, items: items, notes: notes);
       return;
     }
     final status = row['status'] as String;
@@ -370,9 +412,9 @@ class OfflineTransferTransactionRepository
       );
       return;
     }
-    if (status == 'cancelled') {
+    if (status == 'cancelled' || status == 'error' || status == 'syncing') {
       throw StateError(
-        'Transaksi transfer lokal yang dibatalkan tidak dapat diubah.',
+        'Transfer yang sudah pernah dikirim tidak dapat diubah. Retry transfer menggunakan data dan UUID yang sama.',
       );
     }
     final payload = decodeJsonMap(row['payload_json'] as String)
@@ -405,6 +447,11 @@ class OfflineTransferTransactionRepository
     }
     final status = row['status'] as String;
     if (status == 'cancelled') return;
+    if (status == 'error' || status == 'syncing') {
+      throw StateError(
+        'Transfer yang sudah pernah dikirim tidak dapat dibatalkan lokal. Retry dengan UUID yang sama untuk memastikan status backend.',
+      );
+    }
     if (status == 'success') {
       await api.cancelTransaction(
         slug,
@@ -458,8 +505,13 @@ class OfflineTransferTransactionRepository
     }
     final status = row['status'] as String;
     return TransferTransaction.fromJson({
-      'transfer_code': row['local_uuid'],
-      'status': status == 'error' ? 'error' : status,
+      'transfer_code':
+          row['server_transfer_code'] ??
+          metadata['local_id'] ??
+          row['local_uuid'],
+      'status': status == 'success'
+          ? metadata['server_status'] ?? 'completed'
+          : status,
       'created_at': row['created_at'],
       'created_by_name': operatorName,
       'notes': payload['notes'],
@@ -538,72 +590,151 @@ class OfflineTransferTransactionRepository
         if (to != null) 'to_location_name': to['rack_code'],
       };
     }).toList();
-    return <String, dynamic>{
-      'operator_name': operatorName,
-      'items': items,
-    };
+    return <String, dynamic>{'operator_name': operatorName, 'items': items};
+  }
+
+  Future<List<Map<String, dynamic>>> _validatePayloadItems(
+    String slug,
+    List<Map<String, dynamic>> items,
+  ) async {
+    if (items.isEmpty) {
+      throw const ValidationException(
+        'Transfer harus memiliki minimal satu item.',
+        errors: {
+          'items': ['Tambahkan minimal satu item transfer.'],
+        },
+      );
+    }
+    final cached = await OfflineDb.getCachedTransferOptions(
+      tenantSlug: slug,
+      ownerKey: ownerKey,
+    );
+    if (cached == null) {
+      throw const ValidationException(
+        'Opsi SKU dan lokasi belum tersedia.',
+        errors: {
+          'items': ['Muat opsi transfer sebelum menyimpan.'],
+        },
+      );
+    }
+    final skuIds = _asList(cached['skus'])
+        .map((item) => int.tryParse(item['id']?.toString() ?? ''))
+        .whereType<int>()
+        .toSet();
+    final locationIds = _asList(cached['locations'])
+        .map((item) => int.tryParse(item['id']?.toString() ?? ''))
+        .whereType<int>()
+        .toSet();
+
+    return items.asMap().entries.map((entry) {
+      final index = entry.key;
+      final item = entry.value;
+      final skuId = int.tryParse(item['sku_id']?.toString() ?? '');
+      final fromLocationId = int.tryParse(
+        item['from_location_id']?.toString() ?? '',
+      );
+      final toLocationId = int.tryParse(
+        item['to_location_id']?.toString() ?? '',
+      );
+      final quantity = int.tryParse(item['quantity']?.toString() ?? '');
+      final errors = <String>[];
+      if (skuId == null || !skuIds.contains(skuId)) {
+        errors.add('Pilih SKU yang tersedia dari opsi transfer.');
+      }
+      if (fromLocationId == null || !locationIds.contains(fromLocationId)) {
+        errors.add('Pilih lokasi asal yang tersedia dari opsi transfer.');
+      }
+      if (toLocationId == null || !locationIds.contains(toLocationId)) {
+        errors.add('Pilih lokasi tujuan yang tersedia dari opsi transfer.');
+      }
+      if (fromLocationId != null && fromLocationId == toLocationId) {
+        errors.add('Lokasi asal dan tujuan harus berbeda.');
+      }
+      if (quantity == null || quantity < 1) {
+        errors.add('Jumlah transfer minimal 1.');
+      }
+      if (errors.isNotEmpty) {
+        throw ValidationException(
+          'Item transfer ${index + 1} tidak valid. ${errors.join(' ')}',
+          errors: {'items.$index': errors},
+        );
+      }
+
+      return <String, dynamic>{
+        'sku_id': skuId,
+        'from_location_id': fromLocationId,
+        'to_location_id': toLocationId,
+        'quantity': quantity,
+        if (item['batch_number'] != null &&
+            item['batch_number'].toString().isNotEmpty)
+          'batch_number': item['batch_number'],
+        if (item['expiry_date'] != null &&
+            item['expiry_date'].toString().isNotEmpty)
+          'expiry_date': item['expiry_date'],
+      };
+    }).toList();
   }
 
   Map<String, dynamic> _optionsToJson(TransferMasterOptions options) => {
-        'warehouses': options.warehouses
-            .map((item) => {'id': item.id, 'name': item.name})
-            .toList(),
-        'locations': options.locations
-            .map(
-              (item) => {
-                'id': item.id,
-                'rack_code': item.name,
-                'warehouse_id': item.warehouseId,
-                'warehouse_name': item.warehouseName,
-                'stock_quantity': item.stockQuantity,
-              },
-            )
-            .toList(),
-        'skus': options.skus
-            .map(
-              (item) => {
-                'id': item.id,
-                'sku': item.code,
-                'name': item.name,
-                'barcode': item.barcode,
-                'available_stock': item.availableStock,
-                'unit': item.unit,
-              },
-            )
-            .toList(),
-      };
+    'warehouses': options.warehouses
+        .map((item) => {'id': item.id, 'name': item.name})
+        .toList(),
+    'locations': options.locations
+        .map(
+          (item) => {
+            'id': item.id,
+            'rack_code': item.name,
+            'warehouse_id': item.warehouseId,
+            'warehouse_name': item.warehouseName,
+            'stock_quantity': item.stockQuantity,
+          },
+        )
+        .toList(),
+    'skus': options.skus
+        .map(
+          (item) => {
+            'id': item.id,
+            'sku': item.code,
+            'name': item.name,
+            'barcode': item.barcode,
+            'available_stock': item.availableStock,
+            'unit': item.unit,
+          },
+        )
+        .toList(),
+  };
 
   TransferMasterOptions _optionsFromJson(Map<String, dynamic> cached) =>
       TransferMasterOptions(
-        warehouses: _asList(cached['warehouses'])
-            .map((item) => TransferWarehouse.fromJson(item))
-            .toList(),
-        locations: _asList(cached['locations'])
-            .map((item) => TransferLocation.fromJson(item))
-            .toList(),
-        skus: _asList(cached['skus'])
-            .map((item) => TransferSku.fromJson(item))
-            .toList(),
+        warehouses: _asList(
+          cached['warehouses'],
+        ).map((item) => TransferWarehouse.fromJson(item)).toList(),
+        locations: _asList(
+          cached['locations'],
+        ).map((item) => TransferLocation.fromJson(item)).toList(),
+        skus: _asList(
+          cached['skus'],
+        ).map((item) => TransferSku.fromJson(item)).toList(),
       );
 
   List<Map<String, dynamic>> _asList(dynamic value) => value is List
       ? value
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList()
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
       : const [];
 }
 
 final transferTransactionRepositoryProvider =
     Provider<TransferTransactionRepository>((ref) {
-  final dio = ref.watch(dioProvider);
-  final auth = ref.watch(authProvider);
-  final token = auth.token ?? '';
-  return OfflineTransferTransactionRepository(
-    api: ApiTransferTransactionRepository(dio),
-    dio: dio,
-    ownerKey: offlineOwnerKey(userId: auth.userId, token: token),
-    authToken: token,
-    operatorName: auth.userName ?? '',
-  );
-});
+      final dio = ref.watch(dioProvider);
+      final auth = ref.watch(authProvider);
+      final token = auth.token ?? '';
+      return OfflineTransferTransactionRepository(
+        api: ApiTransferTransactionRepository(dio),
+        dio: dio,
+        ownerKey: offlineOwnerKey(userId: auth.userId, token: token),
+        authToken: token,
+        operatorName: auth.userName ?? '',
+      );
+    });

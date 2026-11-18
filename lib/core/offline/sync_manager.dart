@@ -38,24 +38,24 @@ class SyncQueueItem {
   final int retryCount;
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'type': type.name,
-        'payload': jsonEncode(payload),
-        'createdAt': createdAt.toIso8601String(),
-        'status': status.name,
-        'errorMessage': errorMessage,
-        'retryCount': retryCount,
-      };
+    'id': id,
+    'type': type.name,
+    'payload': jsonEncode(payload),
+    'createdAt': createdAt.toIso8601String(),
+    'status': status.name,
+    'errorMessage': errorMessage,
+    'retryCount': retryCount,
+  };
 
   factory SyncQueueItem.fromMap(Map map) => SyncQueueItem(
-        id: map['id'] as String,
-        type: SyncTransactionType.values.byName(map['type'] as String),
-        payload: jsonDecode(map['payload'] as String) as Map<String, dynamic>,
-        createdAt: DateTime.parse(map['createdAt'] as String),
-        status: SyncStatus.values.byName(map['status'] as String),
-        errorMessage: map['errorMessage'] as String?,
-        retryCount: (map['retryCount'] as int?) ?? 0,
-      );
+    id: map['id'] as String,
+    type: SyncTransactionType.values.byName(map['type'] as String),
+    payload: jsonDecode(map['payload'] as String) as Map<String, dynamic>,
+    createdAt: DateTime.parse(map['createdAt'] as String),
+    status: SyncStatus.values.byName(map['status'] as String),
+    errorMessage: map['errorMessage'] as String?,
+    retryCount: (map['retryCount'] as int?) ?? 0,
+  );
 }
 
 class InboundSyncFailure {
@@ -137,7 +137,8 @@ class SyncManager {
       outboundSyncedCount: outbound.syncedCount,
       transferSyncedCount: transfer.syncedCount,
       opnameSyncedCount: opname.syncedCount,
-      failureCount: inbound.failures.length +
+      failureCount:
+          inbound.failures.length +
           outbound.failures.length +
           transfer.failures.length +
           opname.failures.length,
@@ -168,17 +169,18 @@ class SyncManager {
     final activeSync = _activeInboundSync;
     if (activeSync != null) return activeSync;
     late final Future<InboundSyncResult> operation;
-    operation = _performInboundSync(
-      dio: dio,
-      tenantSlug: tenantSlug,
-      ownerKey: ownerKey,
-      authToken: authToken,
-      localUuid: localUuid,
-    ).whenComplete(() {
-      if (identical(_activeInboundSync, operation)) {
-        _activeInboundSync = null;
-      }
-    });
+    operation =
+        _performInboundSync(
+          dio: dio,
+          tenantSlug: tenantSlug,
+          ownerKey: ownerKey,
+          authToken: authToken,
+          localUuid: localUuid,
+        ).whenComplete(() {
+          if (identical(_activeInboundSync, operation)) {
+            _activeInboundSync = null;
+          }
+        });
     _activeInboundSync = operation;
     return operation;
   }
@@ -232,9 +234,11 @@ class SyncManager {
         final data = body['data'];
         final dataMap = data is Map ? data : const <String, dynamic>{};
         final manifest = dataMap['manifest'];
-        final manifestMap =
-            manifest is Map ? manifest : const <String, dynamic>{};
-        final serverCode = dataMap['manifest_code']?.toString() ??
+        final manifestMap = manifest is Map
+            ? manifest
+            : const <String, dynamic>{};
+        final serverCode =
+            dataMap['manifest_code']?.toString() ??
             manifestMap['manifest_code']?.toString();
         await OfflineDb.updateInboundQueueItem(
           localUuid: id,
@@ -268,15 +272,14 @@ class SyncManager {
     String tenantSlug,
     String ownerKey,
     String message,
-  ) =>
-      OfflineDb.updateInboundQueueItem(
-        localUuid: localUuid,
-        tenantSlug: tenantSlug,
-        ownerKey: ownerKey,
-        status: 'error',
-        errorMessage: message,
-        incrementRetry: true,
-      );
+  ) => OfflineDb.updateInboundQueueItem(
+    localUuid: localUuid,
+    tenantSlug: tenantSlug,
+    ownerKey: ownerKey,
+    status: 'error',
+    errorMessage: message,
+    incrementRetry: true,
+  );
 
   Future<OutboundSyncResult> syncOutboundQueue({
     required Dio dio,
@@ -288,17 +291,18 @@ class SyncManager {
     final activeSync = _activeOutboundSync;
     if (activeSync != null) return activeSync;
     late final Future<OutboundSyncResult> operation;
-    operation = _performOutboundSync(
-      dio: dio,
-      tenantSlug: tenantSlug,
-      ownerKey: ownerKey,
-      authToken: authToken,
-      localUuid: localUuid,
-    ).whenComplete(() {
-      if (identical(_activeOutboundSync, operation)) {
-        _activeOutboundSync = null;
-      }
-    });
+    operation =
+        _performOutboundSync(
+          dio: dio,
+          tenantSlug: tenantSlug,
+          ownerKey: ownerKey,
+          authToken: authToken,
+          localUuid: localUuid,
+        ).whenComplete(() {
+          if (identical(_activeOutboundSync, operation)) {
+            _activeOutboundSync = null;
+          }
+        });
     _activeOutboundSync = operation;
     return operation;
   }
@@ -351,9 +355,11 @@ class SyncManager {
         final data = body['data'];
         final dataMap = data is Map ? data : const <String, dynamic>{};
         final manifest = dataMap['manifest'];
-        final manifestMap =
-            manifest is Map ? manifest : const <String, dynamic>{};
-        final serverCode = dataMap['manifest_code']?.toString() ??
+        final manifestMap = manifest is Map
+            ? manifest
+            : const <String, dynamic>{};
+        final serverCode =
+            dataMap['manifest_code']?.toString() ??
             manifestMap['manifest_code']?.toString() ??
             dataMap['code']?.toString() ??
             id;
@@ -392,15 +398,14 @@ class SyncManager {
     String tenantSlug,
     String ownerKey,
     String message,
-  ) =>
-      OfflineDb.updateOutboundQueueItem(
-        localUuid: localUuid,
-        tenantSlug: tenantSlug,
-        ownerKey: ownerKey,
-        status: 'error',
-        errorMessage: message,
-        incrementRetry: true,
-      );
+  ) => OfflineDb.updateOutboundQueueItem(
+    localUuid: localUuid,
+    tenantSlug: tenantSlug,
+    ownerKey: ownerKey,
+    status: 'error',
+    errorMessage: message,
+    incrementRetry: true,
+  );
 
   Future<OpnameSyncResult> syncOpnameQueue({
     required Dio dio,
@@ -412,17 +417,18 @@ class SyncManager {
     final activeSync = _activeOpnameSync;
     if (activeSync != null) return activeSync;
     late final Future<OpnameSyncResult> operation;
-    operation = _performOpnameSync(
-      dio: dio,
-      tenantSlug: tenantSlug,
-      ownerKey: ownerKey,
-      authToken: authToken,
-      localUuid: localUuid,
-    ).whenComplete(() {
-      if (identical(_activeOpnameSync, operation)) {
-        _activeOpnameSync = null;
-      }
-    });
+    operation =
+        _performOpnameSync(
+          dio: dio,
+          tenantSlug: tenantSlug,
+          ownerKey: ownerKey,
+          authToken: authToken,
+          localUuid: localUuid,
+        ).whenComplete(() {
+          if (identical(_activeOpnameSync, operation)) {
+            _activeOpnameSync = null;
+          }
+        });
     _activeOpnameSync = operation;
     return operation;
   }
@@ -454,21 +460,37 @@ class SyncManager {
         final payload = Map<String, dynamic>.from(
           jsonDecode(row['payload_json'] as String) as Map,
         );
-        final response = await dio.post(
-          ApiEndpoints.opnameSyncOffline(tenantSlug),
-          data: payload,
-          options: Options(
-            headers: {
-              'Authorization': 'Bearer $authToken',
-              'X-Tenant-Slug': tenantSlug,
-            },
-          ),
-        );
-        final body = response.data;
-        if (body is! Map || body['success'] != true) {
-          final message = body is Map ? body['message']?.toString() : null;
-          throw ServerException(
-            message ?? 'Server tidak mengonfirmasi sinkronisasi opname.',
+        final identity = _opnameSessionIdentity(payload);
+        final shouldSubmitReview = payload['should_submit_review'] == true;
+        if (payload['counts_synced'] != true) {
+          final response = await dio.post(
+            ApiEndpoints.opnameSyncOffline(tenantSlug),
+            data: _opnameSyncPayload(payload, identity),
+            options: _opnameOptions(tenantSlug, authToken),
+          );
+          _requireOpnameSuccess(
+            response.data,
+            'Server tidak mengonfirmasi sinkronisasi opname.',
+          );
+          if (shouldSubmitReview) {
+            payload['counts_synced'] = true;
+            await OfflineDb.updateOpnameQueuePayload(
+              localUuid: id,
+              tenantSlug: tenantSlug,
+              ownerKey: ownerKey,
+              payload: payload,
+            );
+          }
+        }
+        if (shouldSubmitReview) {
+          final response = await dio.post(
+            ApiEndpoints.opnameSubmitReview(tenantSlug),
+            data: identity,
+            options: _opnameOptions(tenantSlug, authToken),
+          );
+          _requireOpnameSuccess(
+            response.data,
+            'Server tidak mengonfirmasi submit review opname.',
           );
         }
         await OfflineDb.updateOpnameQueueItem(
@@ -479,9 +501,11 @@ class SyncManager {
         );
         syncedCount++;
       } on DioException catch (error) {
-        final message = error.error is AppException
+        final message = error.response?.statusCode == 422
+            ? _opnameResponseError(error)
+            : error.error is AppException
             ? (error.error as AppException).message
-            : _responseError(error);
+            : _opnameResponseError(error);
         await _markOpnameFailed(id, tenantSlug, ownerKey, message);
         failures.add(OpnameSyncFailure(localUuid: id, message: message));
       } on AppException catch (error) {
@@ -502,15 +526,98 @@ class SyncManager {
     String tenantSlug,
     String ownerKey,
     String message,
-  ) =>
-      OfflineDb.updateOpnameQueueItem(
-        localUuid: localUuid,
-        tenantSlug: tenantSlug,
-        ownerKey: ownerKey,
-        status: 'error',
-        errorMessage: message,
-        incrementRetry: true,
+  ) => OfflineDb.updateOpnameQueueItem(
+    localUuid: localUuid,
+    tenantSlug: tenantSlug,
+    ownerKey: ownerKey,
+    status: 'error',
+    errorMessage: message,
+    incrementRetry: true,
+  );
+
+  Map<String, dynamic> _opnameSessionIdentity(Map<String, dynamic> payload) {
+    final sessionId = int.tryParse(payload['session_id']?.toString() ?? '');
+    if (sessionId != null && sessionId > 0) {
+      return {'session_id': sessionId};
+    }
+    final sessionCode = payload['session_code']?.toString() ?? '';
+    if (sessionCode.isNotEmpty) return {'session_code': sessionCode};
+    throw const FormatException(
+      'Payload offline opname tidak memiliki identitas sesi.',
+    );
+  }
+
+  Map<String, dynamic> _opnameSyncPayload(
+    Map<String, dynamic> payload,
+    Map<String, dynamic> identity,
+  ) {
+    final rawItems = payload['items'];
+    if (rawItems is! List || rawItems.isEmpty) {
+      throw const FormatException(
+        'Payload offline opname tidak memiliki item untuk disinkronkan.',
       );
+    }
+    final items = <Map<String, dynamic>>[];
+    for (final rawItem in rawItems) {
+      if (rawItem is! Map || rawItem['physical_qty'] == null) {
+        throw const FormatException(
+          'Setiap item opname harus menyertakan physical_qty.',
+        );
+      }
+      final item = <String, dynamic>{
+        for (final key in const [
+          'item_id',
+          'barcode',
+          'location_id',
+          'target_rack',
+        ])
+          if (rawItem[key] != null) key: rawItem[key],
+        'physical_qty': rawItem['physical_qty'],
+      };
+      if (!item.containsKey('item_id') && !item.containsKey('barcode')) {
+        throw const FormatException(
+          'Item opname harus memiliki item_id atau barcode.',
+        );
+      }
+      items.add(item);
+    }
+    return {...identity, 'items': items};
+  }
+
+  Options _opnameOptions(String tenantSlug, String authToken) => Options(
+    headers: {
+      'Authorization': 'Bearer $authToken',
+      'X-Tenant-Slug': tenantSlug,
+    },
+  );
+
+  void _requireOpnameSuccess(dynamic body, String fallback) {
+    if (body is! Map || body['success'] != true) {
+      final message = body is Map ? body['message']?.toString() : null;
+      throw ServerException(message ?? fallback);
+    }
+  }
+
+  String _opnameResponseError(DioException error) {
+    final body = error.response?.data;
+    if (error.response?.statusCode == 422 && body is Map) {
+      final rawErrors = body['errors'];
+      final details = <String>[];
+      if (rawErrors is Map) {
+        for (final value in rawErrors.values) {
+          if (value is List) {
+            details.addAll(value.map((item) => item.toString()));
+          }
+        }
+      }
+      final message = body['message']?.toString();
+      if (details.isNotEmpty) {
+        return '${message ?? 'Validasi gagal.'} ${details.join(' ')}';
+      }
+      if (message != null) return message;
+    }
+    return _responseError(error);
+  }
 
   Future<TransferSyncResult> syncTransferQueue({
     required Dio dio,
@@ -522,17 +629,18 @@ class SyncManager {
     final activeSync = _activeTransferSync;
     if (activeSync != null) return activeSync;
     late final Future<TransferSyncResult> operation;
-    operation = _performTransferSync(
-      dio: dio,
-      tenantSlug: tenantSlug,
-      ownerKey: ownerKey,
-      authToken: authToken,
-      localUuid: localUuid,
-    ).whenComplete(() {
-      if (identical(_activeTransferSync, operation)) {
-        _activeTransferSync = null;
-      }
-    });
+    operation =
+        _performTransferSync(
+          dio: dio,
+          tenantSlug: tenantSlug,
+          ownerKey: ownerKey,
+          authToken: authToken,
+          localUuid: localUuid,
+        ).whenComplete(() {
+          if (identical(_activeTransferSync, operation)) {
+            _activeTransferSync = null;
+          }
+        });
     _activeTransferSync = operation;
     return operation;
   }
@@ -575,34 +683,38 @@ class SyncManager {
           ),
         );
         final body = response.data;
-        if (body is! Map || body['success'] != true) {
+        final data = body is Map && body['data'] is Map
+            ? Map<String, dynamic>.from(body['data'] as Map)
+            : const <String, dynamic>{};
+        final alreadySynced = data['already_synced'] == true;
+        if (body is! Map || body['success'] != true && !alreadySynced) {
           final message = body is Map ? body['message']?.toString() : null;
           throw ServerException(
             message ?? 'Server tidak mengonfirmasi sinkronisasi transfer.',
           );
         }
 
-        final data = body['data'];
-        final dataMap = data is Map ? data : const <String, dynamic>{};
-        final transfer = dataMap['transfer'];
-        final transferMap =
-            transfer is Map ? transfer : const <String, dynamic>{};
-        final serverCode = dataMap['transfer_code']?.toString() ??
-            transferMap['transfer_code']?.toString() ??
-            dataMap['code']?.toString() ??
-            id;
+        final serverCode = data['transfer_code']?.toString();
+        final serverStatus = data['status']?.toString();
+        if (serverCode == null ||
+            serverCode.isEmpty ||
+            serverStatus == null ||
+            serverStatus.isEmpty) {
+          throw const ServerException(
+            'Respons sinkronisasi transfer tidak memuat kode dan status transfer.',
+          );
+        }
         await OfflineDb.updateTransferQueueItem(
           localUuid: id,
           tenantSlug: tenantSlug,
           ownerKey: ownerKey,
           status: 'success',
           serverTransferCode: serverCode,
+          serverStatus: serverStatus,
         );
         syncedCount++;
       } on DioException catch (error) {
-        final message = error.error is AppException
-            ? (error.error as AppException).message
-            : _responseError(error);
+        final message = _transferResponseError(error);
         await _markTransferFailed(id, tenantSlug, ownerKey, message);
         failures.add(TransferSyncFailure(localUuid: id, message: message));
       } on AppException catch (error) {
@@ -626,15 +738,14 @@ class SyncManager {
     String tenantSlug,
     String ownerKey,
     String message,
-  ) =>
-      OfflineDb.updateTransferQueueItem(
-        localUuid: localUuid,
-        tenantSlug: tenantSlug,
-        ownerKey: ownerKey,
-        status: 'error',
-        errorMessage: message,
-        incrementRetry: true,
-      );
+  ) => OfflineDb.updateTransferQueueItem(
+    localUuid: localUuid,
+    tenantSlug: tenantSlug,
+    ownerKey: ownerKey,
+    status: 'error',
+    errorMessage: message,
+    incrementRetry: true,
+  );
 
   String _responseError(DioException error) {
     final body = error.response?.data;
@@ -642,6 +753,39 @@ class SyncManager {
       return body['message'].toString();
     }
     return error.message ?? 'Sinkronisasi gagal karena koneksi/server.';
+  }
+
+  String _transferResponseError(DioException error) {
+    final body = error.response?.data;
+    if (body is Map) {
+      final rawErrors = body['errors'];
+      final details = <String>[];
+      if (rawErrors is Map) {
+        for (final value in rawErrors.values) {
+          if (value is List) {
+            details.addAll(value.map((item) => item.toString()));
+          }
+        }
+      }
+      final message = body['message']?.toString();
+      if (details.isNotEmpty) {
+        return '${message ?? 'Validasi gagal.'} ${details.join(' ')}';
+      }
+      if (message != null && message.isNotEmpty) return message;
+    }
+    if (error.error is ValidationException) {
+      final validation = error.error as ValidationException;
+      final details = validation.errors.values
+          .expand((messages) => messages)
+          .join(' ');
+      return details.isEmpty
+          ? validation.message
+          : '${validation.message} $details';
+    }
+    if (error.error is AppException) {
+      return (error.error as AppException).message;
+    }
+    return _responseError(error);
   }
 }
 

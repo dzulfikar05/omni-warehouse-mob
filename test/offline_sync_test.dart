@@ -46,6 +46,262 @@ void main() {
     );
   });
 
+  setUp(() async {
+    await OfflineDb.setAutomaticSyncEnabled(false);
+  });
+
+  test('automatic sync setting defaults to manual and persists', () async {
+    expect(await OfflineDb.isAutomaticSyncEnabled(), isFalse);
+
+    await OfflineDb.setAutomaticSyncEnabled(true);
+    expect(await OfflineDb.isAutomaticSyncEnabled(), isTrue);
+
+    await OfflineDb.setAutomaticSyncEnabled(false);
+    expect(await OfflineDb.isAutomaticSyncEnabled(), isFalse);
+  });
+
+  test('transfer and opname stay queued in manual mode', () async {
+    const tenantSlug = 'tenant-manual-queues';
+    const ownerKey = 'user:manual-queues';
+    const session = StockOpnameSession(
+      id: 24,
+      sessionCode: 'SOP-2026-0024',
+      warehouse: 'Gudang Utama',
+      zone: 'Zona A1',
+      status: 'COUNTING',
+      items: [
+        StockOpnameItem(
+          id: 202,
+          skuId: 6,
+          locationId: 10,
+          sku: 'SKU-202',
+          barcode: '00202',
+          name: 'Produk 202',
+          targetRack: 'RACK-A1-02',
+          physicalQty: null,
+        ),
+      ],
+    );
+    await OfflineDb.cacheOpnameSession(
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      sessionCode: session.sessionCode,
+      session: session.toJson(),
+    );
+
+    var requestCount = 0;
+    final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requestCount++;
+          handler.resolve(
+            Response<dynamic>(
+              requestOptions: options,
+              data: {'success': true, 'data': <String, dynamic>{}},
+            ),
+          );
+        },
+      ),
+    );
+    final transferRepository = OfflineTransferTransactionRepository(
+      api: ApiTransferTransactionRepository(dio),
+      dio: dio,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
+      operatorName: 'Operator A',
+    );
+    final opnameRepository = OfflineStockOpnameRepository(
+      api: ApiStockOpnameRepository(dio),
+      dio: dio,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
+      operatorName: 'Operator A',
+    );
+
+    final transferId = await transferRepository.createTransaction(
+      tenantSlug,
+      items: const [
+        {
+          'sku_id': 6,
+          'from_location_id': 10,
+          'to_location_id': 11,
+          'quantity': 2,
+        },
+      ],
+    );
+    final opnameOutcome = await opnameRepository.recordCount(
+      tenantSlug,
+      itemId: 202,
+      physicalQty: 4,
+    );
+
+    expect(requestCount, 0);
+    expect(opnameOutcome.synced, isFalse);
+    expect(
+      (await OfflineDb.getTransferQueue(
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      ))
+          .single['local_uuid'],
+      transferId,
+    );
+    expect(
+      (await OfflineDb.getOpnameQueue(
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      ))
+          .single['status'],
+      'pending',
+    );
+  });
+
+  test('online transfer master data is cached for offline use', () async {
+    const tenantSlug = 'tenant-transfer-options-cache';
+    const ownerKey = 'user:transfer-options-cache';
+    var online = true;
+    final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (!online) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                type: DioExceptionType.connectionError,
+                error: const NetworkException('offline'),
+              ),
+            );
+            return;
+          }
+          handler.resolve(
+            Response<dynamic>(
+              requestOptions: options,
+              data: {
+                'success': true,
+                'data': {
+                  'warehouses': [
+                    {'id': 2, 'name': 'Gudang Utama'},
+                  ],
+                  'available_locations': [
+                    {
+                      'id': 8,
+                      'rack_code': 'RACK-A1',
+                      'warehouse_id': 2,
+                      'quantity': 12,
+                    },
+                  ],
+                  'products': [
+                    {
+                      'id': 5,
+                      'sku': 'SKU-5',
+                      'product_name': 'Produk Lima',
+                      'available_stock': 20,
+                    },
+                  ],
+                },
+              },
+            ),
+          );
+        },
+      ),
+    );
+    final repository = OfflineTransferTransactionRepository(
+      api: ApiTransferTransactionRepository(dio),
+      dio: dio,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
+      operatorName: 'Operator A',
+    );
+
+    final onlineOptions = await repository.getOptions(tenantSlug);
+    online = false;
+    final offlineOptions = await repository.getOptions(tenantSlug);
+
+    expect(onlineOptions.skus.single.name, 'Produk Lima');
+    expect(onlineOptions.locations.single.name, 'RACK-A1');
+    expect(offlineOptions.skus.single.id, 5);
+    expect(offlineOptions.locations.single.stockQuantity, 12);
+  });
+
+  test('manual batch sync sends every transaction type through its queue',
+      () async {
+    const tenantSlug = 'tenant-batch-sync';
+    const ownerKey = 'user:batch-sync';
+    const inboundId = 'TX-INB-BATCH001';
+    const outboundId = 'OUT-BATCH0001';
+    const transferId = 'TX-TRF-BATCH001';
+    const opnameId = 'TX-OPN-BATCH001';
+    await OfflineDb.enqueueInbound(
+      localUuid: inboundId,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      payload: {'local_uuid': inboundId, 'supplier_id': 1, 'items': []},
+      metadata: {'items': []},
+    );
+    await OfflineDb.enqueueOutbound(
+      localUuid: outboundId,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      payload: {'local_uuid': outboundId, 'items': []},
+      metadata: {'items': []},
+    );
+    await OfflineDb.enqueueTransfer(
+      localUuid: transferId,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      payload: {'local_uuid': transferId, 'items': []},
+      metadata: {'items': []},
+    );
+    await OfflineDb.enqueueOpname(
+      localUuid: opnameId,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      sessionId: 42,
+      sessionCode: 'SOP-2026-0042',
+      payload: {'local_uuid': opnameId, 'items': []},
+      metadata: {'items': []},
+    );
+
+    final requests = <RequestOptions>[];
+    final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requests.add(options);
+          handler.resolve(
+            Response<dynamic>(
+              requestOptions: options,
+              data: {
+                'success': true,
+                'data': {
+                  'manifest_code': 'INB-1',
+                  'transfer_code': 'TRF-1',
+                },
+              },
+            ),
+          );
+        },
+      ),
+    );
+
+    final result = await SyncManager.instance.syncAllQueues(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
+    );
+
+    expect(result.syncedCount, 4);
+    expect(result.failureCount, 0);
+    expect(requests.map((request) => request.path), [
+      '/$tenantSlug/inbound/sync-offline',
+      '/$tenantSlug/outbound/sync-offline',
+      '/$tenantSlug/stock-transfer/sync-offline',
+      '/$tenantSlug/stock-opname/sync-offline',
+    ]);
+  });
+
   test('offline transfer retries with the same ID at the transfer sync route',
       () async {
     const localUuid = 'TX-TRF-AB12CD34';
@@ -283,6 +539,12 @@ void main() {
       itemId: 101,
       physicalQty: 7,
     );
+    await SyncManager.instance.syncOpnameQueue(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
+    );
     final firstQueue = await OfflineDb.getOpnameQueue(
       tenantSlug: tenantSlug,
       ownerKey: ownerKey,
@@ -292,6 +554,12 @@ void main() {
       tenantSlug,
       itemId: 101,
       physicalQty: 9,
+    );
+    await SyncManager.instance.syncOpnameQueue(
+      dio: dio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
     );
     final retryQueue = await OfflineDb.getOpnameQueue(
       tenantSlug: tenantSlug,

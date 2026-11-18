@@ -39,6 +39,7 @@ class OmniWarehouseApp extends ConsumerStatefulWidget {
 class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
   StreamSubscription<bool>? _connectivitySubscription;
   bool? _wasOnline;
+  bool _isAutoSyncing = false;
 
   @override
   void initState() {
@@ -65,87 +66,39 @@ class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
   }
 
   Future<void> _syncOfflineQueues() async {
+    if (_isAutoSyncing ||
+        !await SyncManager.instance.shouldSyncAutomatically()) {
+      return;
+    }
     final auth = ref.read(authProvider);
     if (!auth.isAuthenticated || auth.tenantSlug == null) return;
 
     final tenantSlug = auth.tenantSlug!;
     final ownerKey = offlineOwnerKey(userId: auth.userId, token: auth.token!);
+    _isAutoSyncing = true;
     try {
-      final inboundCount = await OfflineDb.countInboundQueue(
+      final result = await SyncManager.instance.syncAllQueues(
+        dio: ref.read(dioProvider),
         tenantSlug: tenantSlug,
         ownerKey: ownerKey,
+        authToken: auth.token!,
       );
-      final outboundCount = await OfflineDb.countOutboundQueue(
-        tenantSlug: tenantSlug,
-        ownerKey: ownerKey,
-      );
-      final transferCount = await OfflineDb.countTransferQueue(
-        tenantSlug: tenantSlug,
-        ownerKey: ownerKey,
-      );
-      final opnameCount = await OfflineDb.countOpnameQueue(
-        tenantSlug: tenantSlug,
-        ownerKey: ownerKey,
-      );
-      if (inboundCount == 0 &&
-          outboundCount == 0 &&
-          transferCount == 0 &&
-          opnameCount == 0) {
-        return;
-      }
-
-      var syncedCount = 0;
-      var failureCount = 0;
-      if (inboundCount > 0) {
-        final result = await SyncManager.instance.syncInboundQueue(
-          dio: ref.read(dioProvider),
-          tenantSlug: tenantSlug,
-          ownerKey: ownerKey,
-          authToken: auth.token!,
-        );
-        syncedCount += result.syncedCount;
-        failureCount += result.failures.length;
+      if (result.inboundSyncedCount > 0) {
         await ref.read(inboundRepositoryProvider.notifier).loadManifests();
       }
-      if (outboundCount > 0) {
-        final result = await SyncManager.instance.syncOutboundQueue(
-          dio: ref.read(dioProvider),
-          tenantSlug: tenantSlug,
-          ownerKey: ownerKey,
-          authToken: auth.token!,
-        );
-        syncedCount += result.syncedCount;
-        failureCount += result.failures.length;
+      if (result.outboundSyncedCount > 0) {
         await ref.read(outboundRepositoryProvider.notifier).loadManifests();
       }
-      if (transferCount > 0) {
-        final result = await SyncManager.instance.syncTransferQueue(
-          dio: ref.read(dioProvider),
-          tenantSlug: tenantSlug,
-          ownerKey: ownerKey,
-          authToken: auth.token!,
-        );
-        syncedCount += result.syncedCount;
-        failureCount += result.failures.length;
-      }
-      if (opnameCount > 0) {
-        final result = await SyncManager.instance.syncOpnameQueue(
-          dio: ref.read(dioProvider),
-          tenantSlug: tenantSlug,
-          ownerKey: ownerKey,
-          authToken: auth.token!,
-        );
-        syncedCount += result.syncedCount;
-        failureCount += result.failures.length;
+      if (result.opnameSyncedCount > 0) {
         await ref
             .read(stockOpnameRepositoryProvider.notifier)
             .loadActiveSession();
       }
-      if (mounted && failureCount > 0) {
+      if (mounted && result.failureCount > 0) {
         OmniSnackbar.show(
           context,
           message:
-              '$syncedCount transaksi tersinkron; $failureCount perlu dicoba ulang.',
+              '${result.syncedCount} transaksi tersinkron; ${result.failureCount} perlu dicoba ulang.',
           icon: Icons.error_outline_rounded,
         );
       }
@@ -165,6 +118,8 @@ class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
           icon: Icons.error_outline_rounded,
         );
       }
+    } finally {
+      _isAutoSyncing = false;
     }
   }
 

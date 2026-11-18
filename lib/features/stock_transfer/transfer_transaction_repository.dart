@@ -86,6 +86,8 @@ class ApiTransferTransactionRepository
       _requireSuccess(envelope, 'Gagal memuat opsi mutasi stok.');
       final data = _asMap(envelope['data'], 'Master data mutasi tidak valid.');
 
+      final rawLocations = data['locations'] ?? data['available_locations'];
+      final rawSkus = data['skus'] ?? data['products'];
       return TransferMasterOptions(
         warehouses: _asList(data['warehouses'], 'gudang')
             .whereType<Map>()
@@ -95,7 +97,7 @@ class ApiTransferTransactionRepository
             )
             .where((warehouse) => warehouse.id > 0 && warehouse.name.isNotEmpty)
             .toList(),
-        locations: _asList(data['locations'], 'lokasi')
+        locations: _asList(rawLocations, 'lokasi')
             .whereType<Map>()
             .map(
               (item) =>
@@ -103,7 +105,7 @@ class ApiTransferTransactionRepository
             )
             .where((location) => location.id > 0 && location.name.isNotEmpty)
             .toList(),
-        skus: _asList(data['skus'], 'SKU')
+        skus: _asList(rawSkus, 'SKU')
             .whereType<Map>()
             .map(
               (item) => TransferSku.fromJson(Map<String, dynamic>.from(item)),
@@ -255,21 +257,29 @@ class OfflineTransferTransactionRepository
   Future<TransferMasterOptions> getOptions(String slug) async {
     try {
       final options = await api.getOptions(slug);
-      await OfflineDb.cacheTransferOptions(
-        tenantSlug: slug,
-        ownerKey: ownerKey,
-        options: _optionsToJson(options),
-      );
+      if (_hasUsableOptions(options)) {
+        await OfflineDb.cacheTransferOptions(
+          tenantSlug: slug,
+          ownerKey: ownerKey,
+          options: _optionsToJson(options),
+        );
+      }
       return options;
-    } on NetworkException {
+    } on AppException {
       final cached = await OfflineDb.getCachedTransferOptions(
         tenantSlug: slug,
         ownerKey: ownerKey,
       );
-      if (cached == null) rethrow;
-      return _optionsFromJson(cached);
+      if (cached != null) {
+        final options = _optionsFromJson(cached);
+        if (_hasUsableOptions(options)) return options;
+      }
+      rethrow;
     }
   }
+
+  bool _hasUsableOptions(TransferMasterOptions options) =>
+      options.skus.isNotEmpty && options.locations.isNotEmpty;
 
   @override
   Future<TransferTransactionListResult> getTransactions(
@@ -410,7 +420,10 @@ class OfflineTransferTransactionRepository
   }
 
   Future<void> _trySync(String slug, String localId) async {
-    if (authToken.isEmpty) return;
+    if (authToken.isEmpty ||
+        !await SyncManager.instance.shouldSyncAutomatically()) {
+      return;
+    }
     await SyncManager.instance.syncTransferQueue(
       dio: dio,
       tenantSlug: slug,

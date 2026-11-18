@@ -339,6 +339,15 @@ class OfflineStockOpnameRepository implements StockOpnameRepository {
             'Sesi login tidak tersedia; sinkronisasi akan dicoba ulang.',
       );
     }
+    if (!await SyncManager.instance.shouldSyncAutomatically()) {
+      final automaticSyncEnabled = await OfflineDb.isAutomaticSyncEnabled();
+      return OpnameSyncOutcome(
+        synced: false,
+        errorMessage: automaticSyncEnabled
+            ? 'Hitungan tersimpan lokal dan menunggu koneksi untuk sinkronisasi otomatis.'
+            : 'Hitungan tersimpan lokal dan menunggu sinkronisasi manual.',
+      );
+    }
     final result = await SyncManager.instance.syncOpnameQueue(
       dio: dio,
       tenantSlug: tenantSlug,

@@ -12,6 +12,8 @@ import '../../core/offline/sync_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
+import '../inbound/inbound_repository.dart';
+import '../outbound/outbound_repository.dart';
 import '../stock_opname/stock_opname_repository.dart';
 
 class SyncItemModel {
@@ -289,51 +291,31 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
 
     setState(() => _isSyncingAll = true);
     try {
-      final inboundResult = await SyncManager.instance.syncInboundQueue(
+      final result = await SyncManager.instance.syncAllQueues(
         dio: ref.read(dioProvider),
         tenantSlug: _tenantSlug,
         ownerKey: _ownerKey,
         authToken: ref.read(authProvider).token ?? '',
       );
-      final outboundResult = await SyncManager.instance.syncOutboundQueue(
-        dio: ref.read(dioProvider),
-        tenantSlug: _tenantSlug,
-        ownerKey: _ownerKey,
-        authToken: ref.read(authProvider).token ?? '',
-      );
-      final transferResult = await SyncManager.instance.syncTransferQueue(
-        dio: ref.read(dioProvider),
-        tenantSlug: _tenantSlug,
-        ownerKey: _ownerKey,
-        authToken: ref.read(authProvider).token ?? '',
-      );
-      final opnameResult = await SyncManager.instance.syncOpnameQueue(
-        dio: ref.read(dioProvider),
-        tenantSlug: _tenantSlug,
-        ownerKey: _ownerKey,
-        authToken: ref.read(authProvider).token ?? '',
-      );
-      if (opnameResult.syncedCount > 0) {
+      if (result.inboundSyncedCount > 0) {
+        await ref.read(inboundRepositoryProvider.notifier).loadManifests();
+      }
+      if (result.outboundSyncedCount > 0) {
+        await ref.read(outboundRepositoryProvider.notifier).loadManifests();
+      }
+      if (result.opnameSyncedCount > 0) {
         await ref
             .read(stockOpnameRepositoryProvider.notifier)
             .loadActiveSession();
       }
       await _loadQueue();
       if (!mounted) return;
-      final syncedCount = inboundResult.syncedCount +
-          outboundResult.syncedCount +
-          transferResult.syncedCount +
-          opnameResult.syncedCount;
-      final failures = inboundResult.failures.length +
-          outboundResult.failures.length +
-          transferResult.failures.length +
-          opnameResult.failures.length;
       OmniSnackbar.show(
         context,
-        message: failures == 0
-            ? '$syncedCount transaksi berhasil disinkronkan.'
-            : '$syncedCount berhasil, $failures gagal. Periksa antrean.',
-        icon: failures == 0
+        message: result.failureCount == 0
+            ? '${result.syncedCount} transaksi berhasil disinkronkan.'
+            : '${result.syncedCount} berhasil, ${result.failureCount} gagal. Periksa antrean.',
+        icon: result.failureCount == 0
             ? Icons.cloud_done_rounded
             : Icons.error_outline_rounded,
       );

@@ -10,6 +10,7 @@ class OfflineDb {
   OfflineDb._();
 
   static const _syncQueueBoxName = 'sync_queue';
+  static const _automaticSyncSettingKey = 'automatic_sync_enabled';
   static Database? _database;
 
   static Future<void> init({
@@ -38,7 +39,7 @@ class OfflineDb {
     _database = await selectedFactory.openDatabase(
       resolvedPath,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 5,
         onCreate: (db, version) async {
           await db.execute('''
             CREATE TABLE inbound_offline_queue (
@@ -70,11 +71,13 @@ class OfflineDb {
           await _createOutboundTables(db);
           await _createTransferTables(db);
           await _createOpnameTables(db);
+          await _createSettingsTable(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) await _createOutboundTables(db);
           if (oldVersion < 3) await _createTransferTables(db);
           if (oldVersion < 4) await _createOpnameTables(db);
+          if (oldVersion < 5) await _createSettingsTable(db);
         },
       ),
     );
@@ -203,6 +206,39 @@ class OfflineDb {
         PRIMARY KEY (tenant_slug, owner_key, session_code)
       )
     ''');
+  }
+
+  static Future<void> _createSettingsTable(
+    sqflite.DatabaseExecutor db,
+  ) async {
+    await db.execute('''
+      CREATE TABLE app_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL
+      )
+    ''');
+  }
+
+  static Future<bool> isAutomaticSyncEnabled() async {
+    final rows = await database.query(
+      'app_settings',
+      columns: ['setting_value'],
+      where: 'setting_key = ?',
+      whereArgs: [_automaticSyncSettingKey],
+      limit: 1,
+    );
+    return rows.isNotEmpty && rows.single['setting_value'] == 'true';
+  }
+
+  static Future<void> setAutomaticSyncEnabled(bool enabled) async {
+    await database.insert(
+      'app_settings',
+      {
+        'setting_key': _automaticSyncSettingKey,
+        'setting_value': enabled ? 'true' : 'false',
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   static DatabaseFactory _ffiDatabaseFactory() {

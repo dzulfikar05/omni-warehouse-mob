@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/offline/offline_db.dart';
+import '../../core/offline/offline_identity.dart';
+import '../../core/offline/sync_manager.dart';
 import '../../core/theme/app_colors.dart';
+import '../inbound/inbound_repository.dart';
+import '../outbound/outbound_repository.dart';
+import '../stock_opname/stock_opname_repository.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import '../../shared/widgets/omni_status_badge.dart';
@@ -16,6 +24,108 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _hapticEnabled = true;
+  bool _automaticSyncEnabled = false;
+  bool _isLoadingSyncSetting = true;
+  bool _isSavingSyncSetting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAutomaticSyncSetting();
+  }
+
+  Future<void> _loadAutomaticSyncSetting() async {
+    try {
+      final enabled = await OfflineDb.isAutomaticSyncEnabled();
+      if (mounted) setState(() => _automaticSyncEnabled = enabled);
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: 'Gagal membaca pengaturan sync otomatis: $error',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingSyncSetting = false);
+    }
+  }
+
+  Future<void> _setAutomaticSyncEnabled(bool enabled) async {
+    setState(() => _isSavingSyncSetting = true);
+    try {
+      await OfflineDb.setAutomaticSyncEnabled(enabled);
+      if (!mounted) return;
+      setState(() => _automaticSyncEnabled = enabled);
+      OmniSnackbar.show(
+        context,
+        message: enabled
+            ? 'Sync otomatis aktif saat internet tersedia.'
+            : 'Mode manual aktif. Gunakan tombol Sync untuk mengirim antrean.',
+        icon: enabled ? Icons.sync_rounded : Icons.touch_app_rounded,
+      );
+      if (enabled) await _syncPendingIfOnline();
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: 'Gagal menyimpan pengaturan sync: $error',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingSyncSetting = false);
+    }
+  }
+
+  Future<void> _syncPendingIfOnline() async {
+    if (!await ConnectivityChecker.instance.isOnline()) return;
+    final auth = ref.read(authProvider);
+    if (!auth.isAuthenticated ||
+        auth.tenantSlug == null ||
+        auth.token == null) {
+      return;
+    }
+    try {
+      final result = await SyncManager.instance.syncAllQueues(
+        dio: ref.read(dioProvider),
+        tenantSlug: auth.tenantSlug!,
+        ownerKey: offlineOwnerKey(userId: auth.userId, token: auth.token!),
+        authToken: auth.token!,
+      );
+      if (result.inboundSyncedCount > 0) {
+        await ref.read(inboundRepositoryProvider.notifier).loadManifests();
+      }
+      if (result.outboundSyncedCount > 0) {
+        await ref.read(outboundRepositoryProvider.notifier).loadManifests();
+      }
+      if (result.opnameSyncedCount > 0) {
+        await ref
+            .read(stockOpnameRepositoryProvider.notifier)
+            .loadActiveSession();
+      }
+      if (!mounted || result.syncedCount == 0 && result.failureCount == 0) {
+        return;
+      }
+      OmniSnackbar.show(
+        context,
+        message: result.failureCount == 0
+            ? '${result.syncedCount} transaksi berhasil disinkronkan.'
+            : '${result.syncedCount} berhasil, ${result.failureCount} gagal. Periksa antrean sync.',
+        icon: result.failureCount == 0
+            ? Icons.cloud_done_rounded
+            : Icons.error_outline_rounded,
+      );
+    } catch (error) {
+      if (mounted) {
+        OmniSnackbar.show(
+          context,
+          message: 'Sync otomatis gagal: $error',
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -572,6 +682,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   icon: Icons.volume_up_rounded,
                 );
               },
+            ),
+          ),
+          const Divider(height: 14, color: Color(0xFFF1F5F9)),
+          _buildSettingsTile(
+            icon: Icons.cloud_sync_rounded,
+            iconColor: AppColors.primary,
+            iconBg: AppColors.primaryLight,
+            title: 'Sinkronisasi Otomatis',
+            subtitle: 'Kirim antrean saat internet tersedia',
+            trailing: Switch.adaptive(
+              value: _automaticSyncEnabled,
+              activeTrackColor: AppColors.primary,
+              onChanged: _isLoadingSyncSetting || _isSavingSyncSetting
+                  ? null
+                  : _setAutomaticSyncEnabled,
             ),
           ),
         ],

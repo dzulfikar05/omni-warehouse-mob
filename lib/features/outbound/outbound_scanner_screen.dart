@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'outbound_model.dart';
 import 'outbound_repository.dart';
@@ -203,6 +204,7 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
         sourceRackId: sourceRackId,
         sourceRack: sourceRack,
         damageNote: damageNote,
+        snapshot: _detail,
       );
       if (!mounted) return;
 
@@ -244,22 +246,34 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
 
   void _openItemPickingSheet(OutboundItem item) {
     final order = _detail!.manifest;
-    final canEdit =
-        order.status != OutboundStatus.dispatched &&
+    final canEdit = order.status != OutboundStatus.dispatched &&
         order.status != OutboundStatus.hold;
 
     final initialGoodQty = item.pickedQty > 0
         ? item.pickedQty
         : (item.orderQty - item.damagedQty > 0
-              ? item.orderQty - item.damagedQty
-              : item.orderQty);
+            ? item.orderQty - item.damagedQty
+            : item.orderQty);
 
     final goodQtyCtrl = TextEditingController(text: initialGoodQty.toString());
     final damagedQtyCtrl = TextEditingController(
       text: item.damagedQty.toString(),
     );
     final damageNoteCtrl = TextEditingController(text: item.notes ?? '');
-    OutboundLocation? selectedLocalRack = _rackById(item.sourceRackId);
+    final locations = _detail!.locations;
+    final warehouseOptions = <int, String>{};
+    for (final location in locations) {
+      final warehouseId = location.warehouseId;
+      final warehouseName = location.warehouseName?.trim();
+      if (warehouseId != null &&
+          warehouseId > 0 &&
+          warehouseName != null &&
+          warehouseName.isNotEmpty) {
+        warehouseOptions[warehouseId] = warehouseName;
+      }
+    }
+    int? selectedWarehouseId;
+    OutboundLocation? selectedLocalRack;
 
     showModalBottomSheet<void>(
       context: context,
@@ -285,23 +299,21 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
               }
             }
 
-            final isComplete =
-                ((int.tryParse(goodQtyCtrl.text.trim()) ?? 0) +
+            final isComplete = ((int.tryParse(goodQtyCtrl.text.trim()) ?? 0) +
                     (int.tryParse(damagedQtyCtrl.text.trim()) ?? 0)) >=
                 item.orderQty;
             final rackCode = order.isOfflinePending
                 ? (selectedLocalRack?.rackCode ??
-                      (item.fromRack.isNotEmpty
-                          ? item.fromRack
-                          : 'Belum dialokasikan'))
+                    (item.fromRack.isNotEmpty
+                        ? item.fromRack
+                        : 'Belum dialokasikan'))
                 : (item.fromRack.isNotEmpty &&
-                          item.fromRack != 'Belum Dialokasi' &&
-                          item.fromRack != 'Belum dialokasikan'
-                      ? item.fromRack
-                      : (_rackById(item.sourceRackId)?.rackCode ??
-                            'Belum dialokasikan'));
-            final hasValidRack =
-                rackCode != 'Belum dialokasikan' &&
+                        item.fromRack != 'Belum Dialokasi' &&
+                        item.fromRack != 'Belum dialokasikan'
+                    ? item.fromRack
+                    : (_rackById(item.sourceRackId)?.rackCode ??
+                        'Belum dialokasikan'));
+            final hasValidRack = rackCode != 'Belum dialokasikan' &&
                 rackCode != 'Belum Dialokasi' &&
                 rackCode.isNotEmpty;
 
@@ -452,32 +464,107 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      if (order.isOfflinePending &&
-                          _detail!.locations.isNotEmpty) ...[
-                        DropdownButtonFormField<OutboundLocation>(
-                          initialValue: selectedLocalRack,
+                      if (warehouseOptions.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            'Data gudang dan stok per SKU belum tersedia.',
+                            style: TextStyle(
+                              color: AppColors.warning,
+                              fontSize: 12,
+                            ),
+                          ),
+                        )
+                      else ...[
+                        DropdownButtonFormField<int>(
+                          initialValue: selectedWarehouseId,
                           isExpanded: true,
                           decoration: const InputDecoration(
-                            labelText: 'Pilih source rack',
+                            labelText: 'Pilih Gudang',
                             border: OutlineInputBorder(),
                           ),
-                          items: _detail!.locations
+                          items: warehouseOptions.entries
                               .map(
-                                (location) => DropdownMenuItem(
-                                  value: location,
+                                (warehouse) => DropdownMenuItem(
+                                  value: warehouse.key,
                                   child: Text(
-                                    location.rackCode,
+                                    warehouse.value,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               )
                               .toList(),
                           onChanged: canEdit
-                              ? (location) => setSheetState(
-                                  () => selectedLocalRack = location,
-                                )
+                              ? (warehouseId) => setSheetState(() {
+                                  selectedWarehouseId = warehouseId;
+                                  selectedLocalRack = null;
+                                })
                               : null,
                         ),
+                        const SizedBox(height: 10),
+                        if (selectedWarehouseId == null)
+                          const Text(
+                            'Pilih gudang terlebih dahulu untuk melihat rak.',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                          )
+                        else
+                          Builder(
+                            builder: (context) {
+                              final rackOptions = locations
+                                  .where(
+                                    (location) =>
+                                        location.warehouseId ==
+                                            selectedWarehouseId &&
+                                        location.stockBySku.containsKey(
+                                          item.skuId,
+                                        ),
+                                  )
+                                  .toList();
+                              final rackValue = rackOptions
+                                      .where(
+                                        (location) =>
+                                            location.id ==
+                                            selectedLocalRack?.id,
+                                      )
+                                      .firstOrNull;
+                              if (rackOptions.isEmpty) {
+                                return const Text(
+                                  'Stok SKU ini belum tersedia di rak gudang terpilih.',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                );
+                              }
+                              return DropdownButtonFormField<OutboundLocation>(
+                                initialValue: rackValue,
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Pilih Rak Sumber',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: rackOptions
+                                    .map(
+                                      (location) => DropdownMenuItem(
+                                        value: location,
+                                        child: Text(
+                                          '${location.rackCode} · ${location.stockBySku[item.skuId]} unit',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: canEdit
+                                    ? (location) => setSheetState(
+                                        () => selectedLocalRack = location,
+                                      )
+                                    : null,
+                              );
+                            },
+                          ),
                         const SizedBox(height: 12),
                       ],
 
@@ -584,13 +671,15 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                         width: double.infinity,
                         height: 48,
                         child: ElevatedButton.icon(
-                          onPressed: canEdit && !_isSaving
+                          onPressed: canEdit &&
+                                  !_isSaving &&
+                                  (warehouseOptions.isEmpty ||
+                                      selectedLocalRack != null)
                               ? () async {
                                   final goodQty =
                                       int.tryParse(goodQtyCtrl.text.trim()) ??
-                                      0;
-                                  final damagedQty =
-                                      int.tryParse(
+                                          0;
+                                  final damagedQty = int.tryParse(
                                         damagedQtyCtrl.text.trim(),
                                       ) ??
                                       0;
@@ -600,16 +689,16 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                                     item: item,
                                     goodQty: goodQty,
                                     damagedQty: damagedQty,
-                                    sourceRackId: order.isOfflinePending
-                                        ? selectedLocalRack?.id
-                                        : item.sourceRackId,
-                                    sourceRack: order.isOfflinePending
-                                        ? selectedLocalRack?.rackCode
-                                        : item.fromRack,
+                                    sourceRackId: warehouseOptions.isEmpty
+                                        ? item.sourceRackId
+                                        : selectedLocalRack?.id,
+                                    sourceRack: warehouseOptions.isEmpty
+                                        ? item.fromRack
+                                        : selectedLocalRack?.rackCode,
                                     damageNote:
                                         damageNoteCtrl.text.trim().isEmpty
-                                        ? null
-                                        : damageNoteCtrl.text.trim(),
+                                            ? null
+                                            : damageNoteCtrl.text.trim(),
                                   );
                                 }
                               : null,
@@ -740,14 +829,23 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
 
     setState(() => _isCommitting = true);
     try {
-      await ref
+      final committed = await ref
           .read(outboundRepositoryProvider.notifier)
-          .commitOutboundApi(widget.code);
+          .commitOutboundApi(widget.code, snapshot: _detail);
       if (!mounted) return;
+      final isOnline = ref.read(connectivityStatusProvider);
       OmniSnackbar.show(
         context,
-        message: 'Manifes ${order.code} berhasil di-commit.',
-        icon: Icons.check_circle_rounded,
+        message: committed
+            ? 'Manifes ${order.code} berhasil di-commit.'
+            : isOnline
+            ? 'Commit belum berhasil. Coba lagi.'
+            : 'Tidak ada jaringan. Commit tersimpan di perangkat dan akan dikirim saat jaringan tersedia.',
+        icon: committed
+            ? Icons.check_circle_rounded
+            : isOnline
+            ? Icons.error_outline_rounded
+            : Icons.cloud_upload_outlined,
       );
       context.go('/outbound');
     } catch (error) {
@@ -961,8 +1059,8 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
               ElevatedButton.icon(
                 onPressed:
                     !canEdit || isHeld || _isCommitting || _isUpdatingStatus
-                    ? null
-                    : () => _commitOutbound(order),
+                        ? null
+                        : () => _commitOutbound(order),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(48, 50),
                   padding: const EdgeInsets.symmetric(
@@ -990,8 +1088,7 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
   }
 
   Widget _buildScanCard(OutboundOrder order) {
-    final canScan =
-        order.status != OutboundStatus.dispatched &&
+    final canScan = order.status != OutboundStatus.dispatched &&
         order.status != OutboundStatus.hold;
     return _card(
       child: Column(
@@ -1067,8 +1164,8 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                       tooltip: 'Buka Kamera Scanner',
                       onPressed:
                           canScan && !_isScanning && !_isCameraScannerOpen
-                          ? _openCameraScanner
-                          : null,
+                              ? _openCameraScanner
+                              : null,
                     ),
                     suffixIcon: _barcodeController.text.isNotEmpty
                         ? IconButton(
@@ -1159,96 +1256,60 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
   Widget _buildItemsCard(
     List<OutboundItem> items,
     OutboundOrder order,
-  ) => _card(
-    padding: EdgeInsets.zero,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-          child: Row(
-            children: [
-              const Expanded(
+  ) =>
+      _card(
+        padding: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Detail Item Picking & Source Rack',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Semua (${items.length})',
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            if (items.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(18),
                 child: Text(
-                  'Detail Item Picking & Source Rack',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
+                  'Manifes ini belum memiliki item.',
+                  style: TextStyle(color: AppColors.textMuted),
                 ),
-              ),
-              Text(
-                'Semua (${items.length})',
-                style: const TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
+              )
+            else
+              ...items.map((item) => _buildItemRow(item, order)),
+          ],
         ),
-        const Divider(height: 1),
-        if (_detail!.locations.any(
-          (location) => location.stockQuantity != null,
-        ))
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Stok per rak',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: _detail!.locations
-                      .where((location) => location.stockQuantity != null)
-                      .map(
-                        (location) => Chip(
-                          label: Text(
-                            '${location.rackCode} · ${location.stockQuantity} unit',
-                          ),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      )
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
-        if (items.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(18),
-            child: Text(
-              'Manifes ini belum memiliki item.',
-              style: TextStyle(color: AppColors.textMuted),
-            ),
-          )
-        else
-          ...items.map((item) => _buildItemRow(item, order)),
-      ],
-    ),
-  );
+      );
 
   Widget _buildItemRow(OutboundItem item, OutboundOrder order) {
-    final canEdit =
-        order.status != OutboundStatus.dispatched &&
+    final canEdit = order.status != OutboundStatus.dispatched &&
         order.status != OutboundStatus.hold;
     final isInvalidQty = item.orderQty <= 0;
     final isDone = item.orderQty > 0 && item.totalProcessedQty >= item.orderQty;
     final hasDamage = item.damagedQty > 0;
     final selected = _selectedItem?.id == item.id;
     final sourceRack = _rackById(item.sourceRackId)?.rackCode ?? item.fromRack;
-    final hasValidRack =
-        sourceRack.isNotEmpty &&
+    final hasValidRack = sourceRack.isNotEmpty &&
         sourceRack != 'Belum Dialokasi' &&
         sourceRack != 'Belum dialokasikan';
 
@@ -1306,10 +1367,10 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                     color: isInvalidQty
                         ? AppColors.danger
                         : (isDone
-                              ? AppColors.success
-                              : (item.totalProcessedQty > 0
-                                    ? AppColors.warning
-                                    : AppColors.textSecondary)),
+                            ? AppColors.success
+                            : (item.totalProcessedQty > 0
+                                ? AppColors.warning
+                                : AppColors.textSecondary)),
                   ),
                 ),
               ],
@@ -1333,9 +1394,8 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
                 final Color rackBg = hasValidRack
                     ? AppColors.primaryLight
                     : AppColors.warningLight;
-                final Color rackFg = hasValidRack
-                    ? AppColors.primary
-                    : AppColors.warning;
+                final Color rackFg =
+                    hasValidRack ? AppColors.primary : AppColors.warning;
 
                 final String statusText;
                 final Color statusBg;
@@ -1404,12 +1464,16 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
               ),
               const SizedBox(width: 4),
             ],
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
           ],
@@ -1473,46 +1537,46 @@ class _OutboundScannerScreenState extends ConsumerState<OutboundScannerScreen> {
   }
 
   Widget _statusBadge(OutboundStatus status) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(
-      color: status.bg,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text(
-      status.label,
-      style: TextStyle(
-        color: status.color,
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: status.bg,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          status.label,
+          style: TextStyle(
+            color: status.color,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
 
   Widget _tag(String label, Color background, Color foreground) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-    decoration: BoxDecoration(
-      color: background,
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(
-      label,
-      style: TextStyle(
-        color: foreground,
-        fontSize: 9,
-        fontWeight: FontWeight.w600,
-      ),
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: foreground,
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
 
   Widget _card({required Widget child, EdgeInsets? padding}) => Container(
-    padding: padding ?? const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppColors.border),
-    ),
-    child: child,
-  );
+        padding: padding ?? const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: child,
+      );
 }
 
 extension _OutboundFirstOrNull<T> on Iterable<T> {

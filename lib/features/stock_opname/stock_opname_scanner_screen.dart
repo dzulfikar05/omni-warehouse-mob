@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'stock_opname_model.dart';
 import 'stock_opname_repository.dart';
@@ -24,6 +25,7 @@ class StockOpnameScannerScreen extends ConsumerStatefulWidget {
 
 class _StockOpnameScannerScreenState
     extends ConsumerState<StockOpnameScannerScreen> {
+  final TextEditingController _barcodeController = TextEditingController();
   final MobileScannerController _scannerController = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
@@ -53,6 +55,7 @@ class _StockOpnameScannerScreenState
 
   @override
   void dispose() {
+    _barcodeController.dispose();
     unawaited(_scannerController.dispose());
     super.dispose();
   }
@@ -66,7 +69,7 @@ class _StockOpnameScannerScreenState
     for (final barcode in capture.barcodes) {
       final value = barcode.rawValue?.trim();
       if (value != null && value.isNotEmpty) {
-        unawaited(_recordScannedBarcode(value));
+        unawaited(_handleBarcodeSubmit(value));
         return;
       }
     }
@@ -82,10 +85,20 @@ class _StockOpnameScannerScreenState
     );
   }
 
-  Future<void> _recordScannedBarcode(String barcode) async {
+  Future<void> _handleBarcodeSubmit([String? value]) async {
     if (_isRecording) return;
+    final barcode = (value ?? _barcodeController.text).trim();
+    if (barcode.isEmpty) {
+      OmniSnackbar.show(
+        context,
+        message: 'Masukkan atau scan barcode/SKU terlebih dahulu.',
+        icon: Icons.error_outline_rounded,
+      );
+      return;
+    }
+
     final session = ref.read(stockOpnameRepositoryProvider).asData?.value;
-    if (session == null) return;
+    if (session == null || !session.canCount) return;
     final normalizedBarcode = barcode.toLowerCase();
     StockOpnameItem? item;
     for (final candidate in session.items) {
@@ -105,9 +118,25 @@ class _StockOpnameScannerScreenState
       return;
     }
 
+    _barcodeController.clear();
+    setState(() => _cameraOpen = false);
+    HapticFeedback.mediumImpact();
+    await _editPhysicalQty(item);
+  }
+
+  Future<void> _editPhysicalQty(StockOpnameItem item) async {
+    if (_isRecording ||
+        ref.read(stockOpnameRepositoryProvider).asData?.value?.canCount !=
+            true) {
+      return;
+    }
     setState(() => _isRecording = true);
     try {
-      final quantity = (item.physicalQty ?? 0) + 1;
+      final quantity = await showDialog<int>(
+        context: context,
+        builder: (_) => _PhysicalCountDialog(item: item),
+      );
+      if (quantity == null || !mounted) return;
       await ref
           .read(stockOpnameRepositoryProvider.notifier)
           .recordCount(
@@ -117,24 +146,28 @@ class _StockOpnameScannerScreenState
             targetRack: item.targetRack,
           );
       if (!mounted) return;
-      HapticFeedback.selectionClick();
-      final updatedSession = ref
-          .read(stockOpnameRepositoryProvider)
-          .asData
-          ?.value;
+      final updatedSession = ref.read(stockOpnameRepositoryProvider).asData?.value;
       final syncError = updatedSession?.syncError;
       final waitingForSync = updatedSession?.isOfflinePending == true;
+      final isOnline = ref.read(connectivityStatusProvider);
+      final itemCode = item.sku.isEmpty ? item.barcode : item.sku;
       OmniSnackbar.show(
         context,
-        message: syncError != null
-            ? 'Hitungan tersimpan lokal, sync gagal: $syncError'
+        message: waitingForSync && !isOnline
+            ? 'Tidak ada jaringan. $itemCode: $quantity ${item.unit} tersimpan di perangkat dan akan dikirim saat jaringan tersedia.'
+            : syncError != null
+            ? 'Gagal mengirim hitungan: $syncError'
             : waitingForSync
-            ? '${item.sku}: $quantity ${item.unit} tersimpan lokal, menunggu sync.'
-            : '${item.sku}: jumlah fisik $quantity ${item.unit}',
-        icon: waitingForSync
+            ? 'Hitungan tersimpan di perangkat.'
+            : '$itemCode: jumlah fisik $quantity ${item.unit} berhasil disimpan.',
+        icon: waitingForSync && !isOnline
             ? Icons.cloud_upload_outlined
+            : syncError != null
+            ? Icons.error_outline_rounded
             : Icons.check_circle_rounded,
-        iconColor: syncError == null ? AppColors.success : AppColors.danger,
+        iconColor: syncError != null
+            ? AppColors.danger
+            : AppColors.success,
       );
     } catch (error) {
       if (mounted) {
@@ -147,56 +180,6 @@ class _StockOpnameScannerScreenState
       }
     } finally {
       if (mounted) setState(() => _isRecording = false);
-    }
-  }
-
-  Future<void> _editPhysicalQty(StockOpnameItem item) async {
-    if (ref.read(stockOpnameRepositoryProvider).asData?.value?.canCount !=
-        true) {
-      return;
-    }
-    final quantity = await showDialog<int>(
-      context: context,
-      builder: (_) => _PhysicalCountDialog(item: item),
-    );
-    if (quantity == null || !mounted) return;
-    try {
-      await ref
-          .read(stockOpnameRepositoryProvider.notifier)
-          .recordCount(
-            itemId: item.id,
-            physicalQty: quantity,
-            locationId: item.locationId,
-            targetRack: item.targetRack,
-          );
-      if (mounted) {
-        final updatedSession = ref
-            .read(stockOpnameRepositoryProvider)
-            .asData
-            ?.value;
-        final syncError = updatedSession?.syncError;
-        OmniSnackbar.show(
-          context,
-          message: syncError != null
-              ? 'Jumlah fisik tersimpan lokal, sync gagal: $syncError'
-              : updatedSession?.isOfflinePending == true
-              ? 'Jumlah fisik tersimpan lokal, menunggu sinkronisasi.'
-              : 'Jumlah fisik berhasil disimpan.',
-          icon: updatedSession?.isOfflinePending == true
-              ? Icons.cloud_upload_outlined
-              : Icons.check_circle_rounded,
-          iconColor: syncError == null ? AppColors.success : AppColors.danger,
-        );
-      }
-    } catch (error) {
-      if (mounted) {
-        OmniSnackbar.show(
-          context,
-          message: error.toString(),
-          icon: Icons.error_outline_rounded,
-          iconColor: AppColors.danger,
-        );
-      }
     }
   }
 
@@ -231,12 +214,15 @@ class _StockOpnameScannerScreenState
           .read(stockOpnameRepositoryProvider)
           .asData
           ?.value;
+      final isOnline = ref.read(connectivityStatusProvider);
       OmniSnackbar.show(
         context,
-        message: updatedSession?.isReviewPending == true
-            ? 'Submit review tersimpan lokal dan menunggu sinkronisasi.'
+        message: updatedSession?.isReviewPending == true && !isOnline
+            ? 'Tidak ada jaringan. Submit review tersimpan di perangkat dan akan dikirim saat jaringan tersedia.'
+            : updatedSession?.isReviewPending == true
+            ? 'Submit review tersimpan di perangkat.'
             : 'Sesi opname berhasil dikirim untuk review supervisor.',
-        icon: updatedSession?.isReviewPending == true
+        icon: updatedSession?.isReviewPending == true && !isOnline
             ? Icons.cloud_upload_outlined
             : Icons.check_circle_rounded,
       );
@@ -258,6 +244,7 @@ class _StockOpnameScannerScreenState
   Widget build(BuildContext context) {
     final sessionState = ref.watch(stockOpnameRepositoryProvider);
     final session = sessionState.asData?.value;
+    final showOfflineWarning = !ref.watch(connectivityStatusProvider);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -295,7 +282,10 @@ class _StockOpnameScannerScreenState
                       'Sesi stock opname tidak ditemukan atau sudah tidak aktif.',
                 );
               }
-              return _buildSessionContent(session);
+              return _buildSessionContent(
+                session,
+                showOfflineWarning: showOfflineWarning,
+              );
             },
           ),
         ),
@@ -345,7 +335,7 @@ class _StockOpnameScannerScreenState
                         label: Text(
                           session.isInReview
                               ? 'Sudah dikirim untuk review'
-                              : session.isReviewPending
+                              : session.isReviewPending && showOfflineWarning
                               ? 'Coba sinkronkan submit review'
                               : !session.canSubmitReview
                               ? 'Sesi tidak dapat dihitung'
@@ -367,16 +357,19 @@ class _StockOpnameScannerScreenState
     );
   }
 
-  Widget _buildSessionContent(StockOpnameSession session) => ListView(
+  Widget _buildSessionContent(
+    StockOpnameSession session, {
+    required bool showOfflineWarning,
+  }) => ListView(
     padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
     children: [
       _SessionInfoCard(session: session),
-      if (session.isOfflinePending) ...[
+      if (session.isOfflinePending && showOfflineWarning) ...[
         const SizedBox(height: 10),
         _OpnameSyncBanner(
           message: session.isReviewPending
-              ? 'Hitungan dan submit review menunggu sinkronisasi.'
-              : 'Hitungan tersimpan di perangkat dan menunggu sinkronisasi.',
+              ? 'Tidak ada jaringan. Hitungan dan submit review tersimpan di perangkat.'
+              : 'Tidak ada jaringan. Hitungan tersimpan di perangkat.',
           errorMessage: session.syncError,
         ),
       ],
@@ -443,117 +436,181 @@ class _StockOpnameScannerScreenState
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: AppColors.border),
     ),
-    child: Column(
-      children: [
-        if (_cameraOpen)
-          SizedBox(
-            height: 210,
-            child: Stack(
-              children: [
-                MobileScanner(
-                  controller: _scannerController,
-                  onDetect: _onDetect,
-                  errorBuilder: (context, error, child) {
-                    final message =
-                        error.errorCode ==
-                            MobileScannerErrorCode.permissionDenied
-                        ? 'Izin kamera ditolak. Aktifkan izin kamera di pengaturan.'
-                        : 'Kamera tidak dapat dibuka: '
-                              '${error.errorDetails?.message ?? error.errorCode.name}';
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          message,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Scan Barcode / Cari SKU',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Auto-Focus Item',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Scan satu SKU, lalu masukkan jumlah fisik total. Bisa gunakan kamera, laser PDA, atau ketik SKU.',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+          ),
+          if (_cameraOpen) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 210,
+              child: Stack(
+                children: [
+                  MobileScanner(
+                    controller: _scannerController,
+                    onDetect: _onDetect,
+                    errorBuilder: (context, error, child) {
+                      final message =
+                          error.errorCode ==
+                              MobileScannerErrorCode.permissionDenied
+                          ? 'Izin kamera ditolak. Aktifkan izin kamera di pengaturan.'
+                          : 'Kamera tidak dapat dibuka: '
+                                '${error.errorDetails?.message ?? error.errorCode.name}';
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            message,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: ValueListenableBuilder<MobileScannerState>(
-                    valueListenable: _scannerController,
-                    builder: (context, state, _) => IconButton.filledTonal(
-                      tooltip: 'Lampu kamera',
-                      onPressed:
-                          !state.isInitialized ||
-                              state.torchState == TorchState.unavailable
-                          ? null
-                          : () => _scannerController.toggleTorch(),
-                      icon: Icon(
-                        state.torchState == TorchState.on
-                            ? Icons.flash_on_rounded
-                            : Icons.flash_off_rounded,
+                      );
+                    },
+                  ),
+                  Positioned(
+                    right: 6,
+                    top: 6,
+                    child: ValueListenableBuilder<MobileScannerState>(
+                      valueListenable: _scannerController,
+                      builder: (context, state, _) => IconButton.filledTonal(
+                        tooltip: 'Lampu kamera',
+                        onPressed:
+                            !state.isInitialized ||
+                                state.torchState == TorchState.unavailable
+                            ? null
+                            : () => _scannerController.toggleTorch(),
+                        icon: Icon(
+                          state.torchState == TorchState.on
+                              ? Icons.flash_on_rounded
+                              : Icons.flash_off_rounded,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          )
-        else
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 17, 16, 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.qr_code_scanner_rounded,
-                  color: AppColors.primary,
-                  size: 24,
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Scan barcode SKU di rak target untuk menambah hitungan fisik.',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: Row(
+          ],
+          const SizedBox(height: 10),
+          Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: canScan
-                      ? () => setState(() => _cameraOpen = !_cameraOpen)
-                      : null,
-                  icon: Icon(
-                    _cameraOpen
-                        ? Icons.videocam_off_outlined
-                        : Icons.camera_alt_outlined,
+                child: TextField(
+                  key: const Key('opnameBarcodeField'),
+                  controller: _barcodeController,
+                  enabled: canScan && !_isRecording,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (value) => _handleBarcodeSubmit(value),
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontFamily: 'RobotoMono',
+                    fontWeight: FontWeight.w600,
                   ),
-                  label: Text(_cameraOpen ? 'Tutup kamera' : 'Buka kamera'),
+                  decoration: InputDecoration(
+                    hintText: 'Scan barcode / ketik SKU...',
+                    hintStyle: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontFamily: 'RobotoMono',
+                      fontWeight: FontWeight.normal,
+                    ),
+                    prefixIcon: IconButton(
+                      tooltip: _cameraOpen ? 'Tutup kamera' : 'Buka kamera',
+                      onPressed: canScan && !_isRecording
+                          ? () => setState(() => _cameraOpen = !_cameraOpen)
+                          : null,
+                      icon: Icon(
+                        _cameraOpen
+                            ? Icons.videocam_off_outlined
+                            : Icons.camera_alt_outlined,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                    suffixIcon: _barcodeController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Hapus barcode',
+                            onPressed: () {
+                              _barcodeController.clear();
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.clear_rounded, size: 18),
+                          ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
                 ),
               ),
               const SizedBox(width: 8),
-              if (_isRecording)
-                const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                const Icon(
-                  Icons.add_circle_outline_rounded,
-                  color: AppColors.primary,
+              ElevatedButton.icon(
+                onPressed: canScan && !_isRecording
+                    ? () => _handleBarcodeSubmit()
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(48, 46),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
+                icon: const Icon(Icons.search_rounded, size: 18),
+                label: const Text(
+                  'Buka',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }
@@ -741,7 +798,11 @@ class _CountItemCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Rak target: ${item.targetRack.isEmpty ? '-' : item.targetRack}',
+                    'Rak target: ${item.targetRack.isNotEmpty
+                        ? item.targetRack
+                        : item.locationLabel.isNotEmpty
+                        ? item.locationLabel
+                        : 'Belum tersedia dari API'}',
                     style: const TextStyle(
                       color: AppColors.textMuted,
                       fontSize: 10,
@@ -802,8 +863,12 @@ class _PhysicalCountDialogState extends State<_PhysicalCountDialog> {
   @override
   void initState() {
     super.initState();
+    final initialQuantity = widget.item.physicalQty?.toString() ?? '0';
     _quantityController = TextEditingController(
-      text: widget.item.physicalQty?.toString() ?? '0',
+      text: initialQuantity,
+    )..selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: initialQuantity.length,
     );
   }
 
@@ -820,9 +885,16 @@ class _PhysicalCountDialogState extends State<_PhysicalCountDialog> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('${widget.item.sku} · ${widget.item.targetRack}'),
+        Text(
+          '${widget.item.sku} · ${widget.item.targetRack.isNotEmpty
+              ? widget.item.targetRack
+              : widget.item.locationLabel.isNotEmpty
+              ? widget.item.locationLabel
+              : 'Rak belum tersedia'}',
+        ),
         const SizedBox(height: 12),
         TextField(
+          key: const Key('opnamePhysicalQtyField'),
           controller: _quantityController,
           autofocus: true,
           keyboardType: TextInputType.number,

@@ -3,11 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/auth/auth_provider.dart';
-import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/offline/offline_db.dart';
 import '../../../core/offline/offline_identity.dart';
-import '../../../core/offline/sync_manager.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/omni_snackbar.dart';
 import '../inbound_local_id.dart';
@@ -193,6 +191,7 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
     }
 
     final offlineItems = <Map<String, dynamic>>[];
+    final onlineItems = <Map<String, dynamic>>[];
     final metadataItems = <Map<String, dynamic>>[];
     for (final item in _items) {
       final quantity = int.tryParse(item.quantityController.text.trim());
@@ -235,6 +234,16 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
         'target_rack': targetRack,
         'damage_note': damageNote.isEmpty ? null : damageNote,
       });
+      onlineItems.add({
+        'product_id': item.product.productId,
+        'sku_id': item.product.id,
+        'expected_qty': quantity,
+        'po_qty': quantity,
+        'good_qty': goodQty,
+        'damaged_qty': damagedQty,
+        'target_rack': targetRack,
+        'damage_note': damageNote.isEmpty ? null : damageNote,
+      });
       metadataItems.add({
         ...offlineItems.last,
         'sku': item.product.sku,
@@ -245,51 +254,41 @@ class _CreateManifestModalState extends ConsumerState<CreateManifestModal> {
 
     setState(() => _isSubmitting = true);
     try {
-      final authState = ref.read(authProvider);
-      final tenantSlug =
-          authState.tenantSlug ?? authState.tenantName ?? 'demo-tenant';
-      final ownerKey = offlineOwnerKey(
-        userId: authState.userId,
-        token: authState.token ?? 'unauthenticated',
-      );
-      await ref.read(inboundRepositoryProvider.notifier).queueOfflineManifest(
-        localUuid: _localUuid,
-        offlinePayload: {
-          'local_uuid': _localUuid,
-          'supplier_id': _selectedSupplier!.id,
-          'should_commit': false,
-          'items': offlineItems,
-        },
-        metadata: {
-          'supplier_id': _selectedSupplier!.id,
-          'supplier_name': _selectedSupplier!.name,
-          'items': metadataItems,
-        },
-      );
-      final result = await SyncManager.instance.shouldSyncAutomatically()
-          ? await SyncManager.instance.syncInboundQueue(
-              dio: ref.read(dioProvider),
-              tenantSlug: tenantSlug,
-              ownerKey: ownerKey,
-              authToken: authState.token ?? '',
+      var savedOffline = false;
+      try {
+        await ref.read(inboundRepositoryProvider.notifier).createManifest(
               localUuid: _localUuid,
-            )
-          : null;
+              supplierId: _selectedSupplier!.id,
+              items: onlineItems,
+            );
+      } on NetworkException {
+        await ref.read(inboundRepositoryProvider.notifier).queueOfflineManifest(
+          localUuid: _localUuid,
+          offlinePayload: {
+            'local_uuid': _localUuid,
+            'supplier_id': _selectedSupplier!.id,
+            'should_commit': false,
+            'items': offlineItems,
+          },
+          metadata: {
+            'supplier_id': _selectedSupplier!.id,
+            'supplier_name': _selectedSupplier!.name,
+            'items': metadataItems,
+          },
+        );
+        savedOffline = true;
+      }
       await ref.read(inboundRepositoryProvider.notifier).loadManifests();
-      final synced =
-          result != null && result.syncedCount == 1 && result.failures.isEmpty;
       if (!mounted) return;
       Navigator.pop(context);
       OmniSnackbar.show(
         context,
-        message: synced
-            ? 'Manifes PO inbound berhasil dibuat.'
-            : result == null
-                ? 'Manifes inbound disimpan lokal dan menunggu sinkronisasi manual.'
-                : result.failures.isEmpty
-                    ? 'Manifes inbound disimpan lokal dan menunggu sinkronisasi.'
-                    : 'Tersimpan lokal, tetapi sync gagal: ${result.failures.first.message}',
-        icon: synced ? Icons.check_circle_rounded : Icons.cloud_off_rounded,
+        message: savedOffline
+            ? 'Tidak ada jaringan. Manifes inbound disimpan di perangkat dan akan dikirim saat jaringan tersedia.'
+            : 'Manifes PO inbound berhasil dibuat.',
+        icon: savedOffline
+            ? Icons.cloud_off_rounded
+            : Icons.check_circle_rounded,
       );
     } catch (error) {
       if (mounted) {

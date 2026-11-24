@@ -9,10 +9,10 @@ class DashboardKpi {
   final int offlineQueueCount;
 
   const DashboardKpi({
-    this.activeInboundCount = 3,
-    this.activeOutboundCount = 2,
-    this.pendingTransferCount = 4,
-    this.activeOpnameCount = 1,
+    this.activeInboundCount = 0,
+    this.activeOutboundCount = 0,
+    this.pendingTransferCount = 0,
+    this.activeOpnameCount = 0,
     this.offlineQueueCount = 0,
   });
 
@@ -123,15 +123,13 @@ class DashboardSummary {
   final DashboardKpi kpi;
   final List<DashboardTaskItem> tasks;
   final bool isOnline;
-  final String shiftName;
   final int pendingSyncCount;
 
   const DashboardSummary({
     this.kpi = const DashboardKpi(),
     this.tasks = const [],
     this.isOnline = true,
-    this.shiftName = 'Shift 1 (Pagi) • 08:00 - 16:00',
-    this.pendingSyncCount = 3,
+    this.pendingSyncCount = 0,
   });
 
   factory DashboardSummary.fromJson(Map<String, dynamic> json) {
@@ -151,7 +149,6 @@ class DashboardSummary {
           : const DashboardKpi(),
       tasks: taskList,
       isOnline: (json['is_online'] ?? json['isOnline'] ?? true) as bool,
-      shiftName: json['shift_name']?.toString() ?? 'Shift 1 (Pagi) • 08:00 - 16:00',
       pendingSyncCount: (json['pending_sync_count'] ?? json['pendingSyncCount'] ?? 0) as int,
     );
   }
@@ -160,7 +157,6 @@ class DashboardSummary {
     'kpi': kpi.toJson(),
     'tasks': tasks.map((e) => e.toJson()).toList(),
     'is_online': isOnline,
-    'shift_name': shiftName,
     'pending_sync_count': pendingSyncCount,
   };
 
@@ -168,14 +164,12 @@ class DashboardSummary {
     DashboardKpi? kpi,
     List<DashboardTaskItem>? tasks,
     bool? isOnline,
-    String? shiftName,
     int? pendingSyncCount,
   }) {
     return DashboardSummary(
       kpi: kpi ?? this.kpi,
       tasks: tasks ?? this.tasks,
       isOnline: isOnline ?? this.isOnline,
-      shiftName: shiftName ?? this.shiftName,
       pendingSyncCount: pendingSyncCount ?? this.pendingSyncCount,
     );
   }

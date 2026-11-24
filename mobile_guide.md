@@ -25,7 +25,7 @@ Manage Users & Roles   →    (tidak ada di mobile)
 ### 1.2 Prinsip Desain
 - **Task-first**: Operator masuk → langsung tau mau ngapain (Today's tasks)
 - **Scan-centric**: Scanning adalah core interaction, bukan form typing
-- **Offline-first**: Semua transaksi bisa dieksekusi walau koneksi buruk, data disync saat online
+- **Offline-first**: Saat online, transaksi dikirim langsung ke API fitur terkait. Jika request gagal karena jaringan, perubahan disimpan lokal dan dapat dikirim ulang saat koneksi pulih.
 - **Role-aware**: UI menyesuaikan role user (operator vs supervisor)
 - **One-handed friendly**: CTA selalu di bawah, mudah dijangkau jempol
 
@@ -333,10 +333,8 @@ Outbound diakses dari **Dashboard Today's Task card** atau dari **Inbound tab de
 /dashboard                 ← Main tab 1
 /inbound                   ← Main tab 2 — list manifest
 /inbound/:code             ← Detail/scanner manifest tertentu
-/inbound/form              ← Form konfigurasi scan baru
 /outbound                  ← Dari dashboard card
 /outbound/:code
-/outbound/form
 /transfer                  ← Dari dashboard card  
 /transfer/form
 /opname                    ← Dari dashboard card
@@ -453,7 +451,7 @@ class DashboardData {
 
 ### 7.5 Inbound — List (`/inbound`)
 **Tampilan:**
-- AppBar: "Inbound Management" + tombol "+ Add" (jika ada permission)
+- AppBar: "Inbound Management"; manifes dibuat di sistem upstream, bukan dari mobile
 - Stats row: Total PO In | Receiving | Draft | Closed
 - Search bar: cari PO, supplier, no polisi
 - Filter chips: Semua | RECEIVING | DRAFT | CLOSED
@@ -474,52 +472,23 @@ class DashboardData {
 
 ---
 
-### 7.6 Inbound — Form Konfigurasi (`/inbound/form`)
-**Tampilan:**
-- AppBar: "Inisiasi Sesi Penerimaan"
-- Form fields:
-  - No. PO (text input)
-  - Supplier (dropdown — data dari API)
-  - Warehouse (dropdown)
-  - Rack/Lokasi (dropdown, filter by warehouse)
-  - Qty
-  - Add Note (textarea, optional)
-- Button besar: "Start Scan →"
+### 7.6 Inbound — Scanner (`/inbound/:code`)
+- Pilih manifes yang sudah ada, scan barcode/SKU, lalu simpan kuantitas baik/rusak dan rak putaway.
+- Tidak ada pembuatan manifes inbound di mobile.
+- Saat online, pembuatan manifes dan perubahan scan/putaway/commit dikirim langsung ke API inbound. Jika tidak ada koneksi, perubahan disimpan lokal per `manifest_code`; commit ditambahkan ke payload yang sama sebagai `should_commit`.
 
 ---
 
-### 7.7 Inbound — Scanner (`/inbound/:code`)
-**Tampilan — 3 State:**
-
-**State: IDLE (sebelum scan)**
-- Kamera aktif, overlay scanner kotak di tengah
-- Teks: "Arahkan kamera ke barcode/QR item"
-- Tombol manual: "Input Manual"
-
-**State: SCANNED (barcode terdeteksi)**
-- Kamera freeze / stop
-- Card hasil: Kode PO (mono), nama produk, supplier
-- Progress: `X dari Y unit tervalidasi`
-- 2 Button: "Mulai Scanning Inbound ✓" | "Scan Ulang"
-
-**State: CONFIRMED (putaway)**
-- Form mini: Good Qty | Damaged Qty | Target Rack
-- Notes optional
-- Button: "Simpan & Lanjut Scan" → kembali ke IDLE
-- Jika semua item selesai → Button "Commit Inbound" (stok masuk DB)
-
----
-
-### 7.8 Outbound — List, Form, Scanner
-Struktur **identik dengan Inbound** dengan perubahan:
-- "Supplier" → "Customer"
-- "Penerimaan PO" → "Pengiriman SO"
-- Final action: "Commit Dispatch" (stok keluar DB)
+### 7.7 Outbound — List and Scanner
+- Mobile hanya membuka manifes SO yang sudah ada; pembuatan manifes outbound tidak tersedia di mobile.
+- Scan barcode/SKU dan simpan kuantitas picking, jumlah rusak, serta rak sumber. Pemilihan rak dilakukan setelah memilih gudang; stok SKU per rak hanya ditampilkan pada dropdown rak.
+- Detail outbound harus mengirim `warehouse_id`, `warehouse_name`, dan `stock_by_sku` (map `sku_id` ke jumlah stok) pada setiap lokasi. Jumlah total stok lokasi tidak dapat menggantikan stok per SKU.
+- Saat online, pembuatan manifes dan perubahan picking/commit dikirim langsung ke API outbound. Jika tidak ada koneksi, hasil picking disimpan lokal per `manifest_code`; commit disatukan dengan payload offline melalui `should_commit`.
 - Status: PICKING | PACKING | DISPATCHED | HOLD
 
 ---
 
-### 7.9 Stock Transfer (`/transfer`)
+### 7.8 Stock Transfer (`/transfer`)
 **List Screen:**
 - Daftar transfer lokal dan status sinkronisasi; antrean tetap tersimpan sampai backend mengonfirmasi sukses
 
@@ -528,11 +497,11 @@ Struktur **identik dengan Inbound** dengan perubahan:
 - Setiap item harus memiliki `sku_id`, `from_location_id`, `to_location_id`, dan `quantity` minimal 1
 - Catatan, batch, dan tanggal kedaluwarsa bersifat opsional; backend tetap menentukan stok yang dipindahkan dengan FEFO
 
-Transfer offline memiliki kode lokal `TRF-YYYYMMDD-XXXX` dan UUID sinkronisasi terpisah, beserta item, lokasi, kuantitas, catatan, dan waktu pembuatan. Retry memakai UUID yang sama; backend mengeksekusi transfer saat sync dan respons `already_synced` menandakan retry idempoten. Error validasi atau koneksi tidak menghapus antrean.
+Transfer online langsung dikirim ke API. Jika koneksi tidak tersedia, transfer disimpan lokal dengan kode `TRF-YYYYMMDD-XXXX` dan UUID transaksi; retry memakai UUID yang sama dan respons `already_synced` menandakan retry idempoten. Error validasi tidak dimasukkan ke antrean offline.
 
 ---
 
-### 7.10 Stock Opname (`/opname`)
+### 7.9 Stock Opname (`/opname`)
 **List Screen:**
 - Tampilkan semua sesi dengan progress, status, gudang, lokasi/rak, auditor, dan waktu pembuatan
 - Gunakan pagination backend dan buka detail sesi berdasarkan `session_id`
@@ -540,13 +509,14 @@ Transfer offline memiliki kode lokal `TRF-YYYYMMDD-XXXX` dan UUID sinkronisasi t
 
 **Scanner Screen (Offline-first):**
 - Tampilkan list item per rak yang perlu dihitung
-- Scan barcode item → auto-match ke daftar opname session
-- Input: Physical Qty (stepper: + dan -)
+- Scan atau ketik satu barcode/SKU → auto-match ke daftar item sesi
+- Setelah SKU ditemukan, masukkan jumlah fisik total untuk SKU tersebut; tidak perlu scan satu barcode berulang kali untuk setiap unit
+- Field jumlah otomatis memilih nilai hitungan terakhir agar mudah dikoreksi
 - Blind count: jangan meminta atau menampilkan stok sistem maupun variance
 - Gunakan `location_id` dan rak sebagai lingkup hitung; tampilkan `location_label` untuk informasi lokasi. `zone` hanya kompatibilitas sesi lama.
 - Sesi yang terikat ke lokasi harus tetap dihitung pada `session.location_id`. Untuk sesi semua lokasi, setiap hitungan harus menyertakan lokasi dan rak.
 - Sesi yang ditutup atau disesuaikan tidak menerima hitungan baru
-- Data tersimpan lokal saat offline lalu dikirim melalui `sync-offline`
+- Saat online, hitungan dan submit review dikirim langsung ke endpoint masing-masing. Hanya jika request gagal karena jaringan, data disimpan lokal untuk dikirim ulang melalui antrean offline
 - Progress bar: `X dari Y item terhitung`
 
 **API yang tersedia (relatif terhadap prefix API):**
@@ -561,7 +531,7 @@ Jangan mengarang endpoint daftar/buat sesi atau field payload. Tampilkan error v
 
 ---
 
-### 7.11 Generic Scanner (`/scanner` — center tab)
+### 7.10 Generic Scanner (`/scanner` — center tab)
 **Behavior:**
 - Kamera aktif langsung
 - Scan barcode apapun
@@ -574,7 +544,7 @@ Jangan mengarang endpoint daftar/buat sesi atau field payload. Tampilkan error v
 
 ---
 
-### 7.12 Sync Data (`/sync` — tab 4)
+### 7.11 Sync Data (`/sync` — tab 4)
 **Tampilan:**
 - AppBar: "Sinkronisasi Data"
 - Banner status: Online ✓ / Offline ✗
@@ -584,7 +554,11 @@ Jangan mengarang endpoint daftar/buat sesi atau field payload. Tampilkan error v
 - Link: "Hapus Log Sukses" (hapus log yang sudah berhasil)
 
 **Offline Queue Logic:**
-- Pembuatan manifes dan input hitung/putaway inbound disimpan terlebih dahulu ke SQLite dengan ID lokal `TX-INB-XXXXXXXX` yang tetap. Nilai ini dikirim pada field backend `local_uuid` agar retry idempoten.
+- Daftar inbound, outbound, transfer, dan sesi opname menyimpan respons API terakhir di SQLite per tenant, pengguna, dan filter; kegagalan jaringan menampilkan snapshot tersebut tanpa menghapus antrean lokal.
+- Saat API dapat dijangkau, pembuatan inbound/outbound/transfer dan pencatatan hitungan opname dikirim langsung ke endpoint fitur, bukan melewati antrean sync. Antrean lokal hanya dipakai jika request gagal karena jaringan; pesan offline ditampilkan untuk transaksi yang benar-benar tertunda.
+- Scan/putaway inbound dan picking/commit outbound untuk manifes yang sudah ada disimpan terlebih dahulu ke SQLite dan dikirim melalui endpoint `sync-offline` dengan `manifest_code`; commit menggunakan `should_commit`. Retry mempertahankan identitas queue yang sama.
+- Pembuatan transfer dapat dilakukan offline; draft disimpan lokal dengan UUID transaksi yang stabil dan dikirim melalui endpoint `sync-offline`.
+- Hitungan opname disimpan lokal per sesi saat offline lalu dikirim melalui endpoint `sync-offline`.
 - Master supplier, SKU, dan rak di-cache secara terpisah untuk tenant dan pengguna aktif; antrean pengguna lain tidak ditampilkan atau dikirim.
 - Mode default adalah manual: seluruh antrean inbound, outbound, transfer, dan opname dikirim melalui tombol "Sync Sekarang".
 - Pengaturan Profil menyediakan toggle "Sinkronisasi Otomatis". Jika aktif, antrean dikirim ketika koneksi internet tersedia; jika dinyalakan saat online, antrean yang sudah ada langsung dicoba.
@@ -594,7 +568,7 @@ Jangan mengarang endpoint daftar/buat sesi atau field payload. Tampilkan error v
 
 ---
 
-### 7.13 Profile (`/profile` — tab 5)
+### 7.12 Profile (`/profile` — tab 5)
 **Tampilan:**
 - Avatar besar (initials atau foto)
 - Nama user + tenant name
@@ -605,7 +579,7 @@ Jangan mengarang endpoint daftar/buat sesi atau field payload. Tampilkan error v
 
 ---
 
-### 7.14 Edit Profile (`/profile/edit`)
+### 7.13 Edit Profile (`/profile/edit`)
 **Form:**
 - Nama Lengkap
 - Email (read-only, tidak bisa diubah)
@@ -778,8 +752,8 @@ Setelah splash → check token di secure storage:
 ### ✅ Ada di Mobile
 - Auth (multi-step tenant + credentials)
 - Dashboard (today's tasks, KPI ringkas)
-- Inbound execution (list, form, scanner, putaway, commit)
-- Outbound execution (list, form, scanner, pick, commit)
+- Inbound execution (list, scanner, putaway, commit)
+- Outbound execution (list, scanner, pick, commit)
 - Stock Transfer (list, form, scanner single-item)
 - Stock Opname (list session, scanner count, offline-first)
 - Generic Scanner (product lookup)

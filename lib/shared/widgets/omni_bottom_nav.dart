@@ -4,6 +4,72 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import 'omni_feature_menu.dart';
 
+Future<void> _showQuickAccess(BuildContext context) => showModalBottomSheet<void>(
+  context: context,
+  useSafeArea: true,
+  backgroundColor: Colors.white,
+  constraints: const BoxConstraints(maxWidth: 480),
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+  ),
+  builder: (sheetContext) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'Akses Cepat',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _QuickAccessTile(
+          icon: Icons.inbox_rounded,
+          title: 'Daftar Inbound',
+          subtitle: 'Buka daftar penerimaan barang',
+          onTap: () {
+            Navigator.pop(sheetContext);
+            context.go('/inbound');
+          },
+        ),
+        _QuickAccessTile(
+          icon: Icons.outbox_rounded,
+          title: 'Daftar Outbound',
+          subtitle: 'Buka daftar pengiriman barang',
+          onTap: () {
+            Navigator.pop(sheetContext);
+            context.go('/outbound');
+          },
+        ),
+        _QuickAccessTile(
+          icon: Icons.qr_code_scanner_rounded,
+          title: 'Buka Scanner',
+          subtitle: 'Pindai dokumen, rak, atau SKU',
+          onTap: () {
+            Navigator.pop(sheetContext);
+            context.go('/scanner');
+          },
+        ),
+      ],
+    ),
+  ),
+);
+
 class OmniBottomNav extends StatelessWidget {
   const OmniBottomNav({super.key, required this.shell});
 
@@ -39,13 +105,16 @@ class OmniBottomNav extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
+            onTap: () => _showQuickAccess(context),
             borderRadius: BorderRadius.circular(18),
-            onTap: () => shell.goBranch(2, initialLocation: selectedIndex == 2),
-            child: const Center(
-              child: Icon(
-                Icons.qr_code_scanner_rounded,
-                color: Colors.white,
-                size: 26,
+            child: const Tooltip(
+              message: 'Akses cepat',
+              child: Center(
+                child: Icon(
+                  Icons.qr_code_scanner_rounded,
+                  color: Colors.white,
+                  size: 26,
+                ),
               ),
             ),
           ),
@@ -83,7 +152,7 @@ class OmniBottomNav extends StatelessWidget {
                   selected: selectedIndex == 1,
                   onTap: () => _goBranch(1),
                 ),
-                const SizedBox(width: 68), // Spacer for Center Floating Scanner Button
+                const SizedBox(width: 68),
                 _BottomNavItem(
                   label: 'Outbound',
                   icon: Icons.outbox_rounded,
@@ -111,6 +180,33 @@ class OmniBottomNav extends StatelessWidget {
   void _goBranch(int index) {
     shell.goBranch(index, initialLocation: index == shell.currentIndex);
   }
+}
+
+class _QuickAccessTile extends StatelessWidget {
+  const _QuickAccessTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+    leading: Icon(icon, color: AppColors.primary),
+    title: Text(
+      title,
+      style: const TextStyle(fontWeight: FontWeight.w700),
+    ),
+    subtitle: Text(subtitle),
+    trailing: const Icon(Icons.chevron_right_rounded),
+    onTap: onTap,
+  );
 }
 
 class _BottomNavItem extends StatelessWidget {

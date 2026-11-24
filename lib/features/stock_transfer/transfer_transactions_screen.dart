@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'transfer_transaction_model.dart';
@@ -106,6 +107,7 @@ class _TransferTransactionsScreenState
   }
 
   Future<void> _openDetails(TransferTransaction transaction) async {
+    final showOfflineWarning = !ref.read(connectivityStatusProvider);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -113,6 +115,7 @@ class _TransferTransactionsScreenState
       constraints: const BoxConstraints(maxWidth: 480),
       builder: (context) => _TransferDetailSheet(
         transaction: transaction,
+        showOfflineWarning: showOfflineWarning,
         onEdit: transaction.isEditable
             ? () {
                 Navigator.of(context).pop();
@@ -215,6 +218,7 @@ class _TransferTransactionsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final showOfflineWarning = !ref.watch(connectivityStatusProvider);
     final stats = _stats ??
         const TransferTransactionStats(
           total: 0,
@@ -325,7 +329,10 @@ class _TransferTransactionsScreenState
                   ..._transactions.map(
                     (transaction) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: _buildTransactionCard(transaction),
+                      child: _buildTransactionCard(
+                        transaction,
+                        showOfflineWarning: showOfflineWarning,
+                      ),
                     ),
                   ),
               ],
@@ -566,7 +573,10 @@ class _TransferTransactionsScreenState
     );
   }
 
-  Widget _buildTransactionCard(TransferTransaction transaction) {
+  Widget _buildTransactionCard(
+    TransferTransaction transaction, {
+    required bool showOfflineWarning,
+  }) {
     final statusStyle = _statusStyle(transaction.status);
     final previewLines = transaction.items.take(2).toList();
     return Material(
@@ -693,7 +703,8 @@ class _TransferTransactionsScreenState
                   ),
                 ],
               ),
-              if (transaction.syncError != null &&
+              if (showOfflineWarning &&
+                  transaction.syncError != null &&
                   transaction.syncError!.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -853,11 +864,13 @@ class _TransferTransactionsScreenState
 class _TransferDetailSheet extends StatelessWidget {
   const _TransferDetailSheet({
     required this.transaction,
+    required this.showOfflineWarning,
     this.onEdit,
     this.onCancel,
   });
 
   final TransferTransaction transaction;
+  final bool showOfflineWarning;
   final VoidCallback? onEdit;
   final VoidCallback? onCancel;
 
@@ -933,7 +946,8 @@ class _TransferDetailSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            if (transaction.syncError != null &&
+            if (showOfflineWarning &&
+                transaction.syncError != null &&
                 transaction.syncError!.isNotEmpty) ...[
               Align(
                 alignment: Alignment.centerLeft,

@@ -134,30 +134,68 @@ class OutboundLocation {
     required this.id,
     required this.rackCode,
     this.zone,
+    this.warehouseId,
+    this.warehouseName,
     this.stockQuantity,
+    this.stockBySku = const {},
   });
 
   final int id;
   final String rackCode;
   final String? zone;
+  final int? warehouseId;
+  final String? warehouseName;
   final int? stockQuantity;
+  final Map<int, int> stockBySku;
 
-  factory OutboundLocation.fromJson(Map<String, dynamic> json) =>
-      OutboundLocation(
-        id: _asInt(json['id']),
-        rackCode: (json['rack_code'] ?? json['code'] ?? '').toString(),
-        zone: json['zone']?.toString(),
-        stockQuantity: _asNullableInt(
-          json['stock_quantity'] ??
-              json['stock_qty'] ??
-              json['current_qty'] ??
-              json['stock'] ??
-              json['available_quantity'] ??
-              json['available_stock'] ??
-              json['quantity'] ??
-              json['qty'],
-        ),
-      );
+  factory OutboundLocation.fromJson(Map<String, dynamic> json) {
+    final warehouse = json['warehouse'] is Map
+        ? Map<String, dynamic>.from(json['warehouse'] as Map)
+        : const <String, dynamic>{};
+    final rawStockBySku = json['stock_by_sku'];
+    final stockBySku = <int, int>{};
+    if (rawStockBySku is Map) {
+      rawStockBySku.forEach((key, value) {
+        final skuId = int.tryParse(key.toString());
+        final quantity = _asNullableInt(value);
+        if (skuId != null && quantity != null) {
+          stockBySku[skuId] = quantity;
+        }
+      });
+    }
+
+    return OutboundLocation(
+      id: _asInt(json['id']),
+      rackCode: (json['rack_code'] ?? json['code'] ?? '').toString(),
+      zone: json['zone']?.toString(),
+      warehouseId: _asNullableInt(json['warehouse_id'] ?? warehouse['id']),
+      warehouseName: (json['warehouse_name'] ?? warehouse['name'])?.toString(),
+      stockQuantity: _asNullableInt(
+        json['stock_quantity'] ??
+            json['stock_qty'] ??
+            json['current_qty'] ??
+            json['stock'] ??
+            json['available_quantity'] ??
+            json['available_stock'] ??
+            json['quantity'] ??
+            json['qty'],
+      ),
+      stockBySku: stockBySku,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'rack_code': rackCode,
+    'zone': zone,
+    'warehouse_id': warehouseId,
+    'warehouse_name': warehouseName,
+    'stock_quantity': stockQuantity,
+    'stock_by_sku': {
+      for (final entry in stockBySku.entries)
+        entry.key.toString(): entry.value,
+    },
+  };
 }
 
 class OutboundItem {

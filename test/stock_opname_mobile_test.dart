@@ -30,7 +30,10 @@ void main() {
     final repository = _FakeStockOpnameRepository();
     await tester.pumpWidget(
       _app(
-        const StockOpnameScannerScreen(sessionCode: 'SOP-2026-0042'),
+        const StockOpnameScannerScreen(
+          sessionCode: 'SOP-2026-0042',
+          sessionId: 42,
+        ),
         repository: repository,
       ),
     );
@@ -40,7 +43,10 @@ void main() {
     expect(find.textContaining('Stok Sistem'), findsNothing);
     await tester.tap(find.text('SKU-101'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '7');
+    await tester.enterText(
+      find.byKey(const Key('opnamePhysicalQtyField')),
+      '7',
+    );
     await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
 
@@ -56,6 +62,73 @@ void main() {
     expect(find.text('Status: REVIEW'), findsOneWidget);
     expect(find.text('Selesaikan Opname / Submit Review'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('scanning one SKU opens input for its total physical quantity', (
+    tester,
+  ) async {
+    final repository = _FakeStockOpnameRepository();
+    await tester.pumpWidget(
+      _app(
+        const StockOpnameScannerScreen(
+          sessionCode: 'SOP-2026-0042',
+          sessionId: 42,
+        ),
+        repository: repository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('opnameBarcodeField')),
+      '00101',
+    );
+    await tester.tap(find.text('Buka'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('opnamePhysicalQtyField')),
+      '24',
+    );
+    await tester.tap(find.text('Simpan'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedCounts, [(101, 24)]);
+    expect(find.text('24 pcs'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows the location label when the rack code is missing', (
+    tester,
+  ) async {
+    final repository = _FakeStockOpnameRepository()
+      ..detailSession = _session.copyWith(
+        items: const [
+          StockOpnameItem(
+            id: 101,
+            sku: 'SKU-101',
+            barcode: '00101',
+            name: 'Produk 101',
+            targetRack: '',
+            locationId: 8,
+            locationLabel: 'Rak A1',
+            physicalQty: null,
+          ),
+        ],
+      );
+    await tester.pumpWidget(
+      _app(
+        const StockOpnameScannerScreen(
+          sessionCode: 'SOP-2026-0042',
+          sessionId: 42,
+        ),
+        repository: repository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rak target: Rak A1'), findsOneWidget);
   });
 
   testWidgets('shows count validation errors to the operator', (tester) async {
@@ -76,7 +149,10 @@ void main() {
 
     await tester.tap(find.text('SKU-101'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '7');
+    await tester.enterText(
+      find.byKey(const Key('opnamePhysicalQtyField')),
+      '7',
+    );
     await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
 

@@ -7,6 +7,8 @@ import '../../core/api/api_exception.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/offline/offline_db.dart';
 import '../../core/offline/offline_identity.dart';
+import '../../core/offline/sync_manager.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import 'outbound_model.dart';
 
 class OutboundMasterOptions {
@@ -65,14 +67,15 @@ abstract class OutboundRepository {
 }
 
 class ApiOutboundRepository implements OutboundRepository {
-  ApiOutboundRepository(this._dio);
+  ApiOutboundRepository(this._dio, {this.ownerKey});
 
   final Dio _dio;
+  final String? ownerKey;
 
   AppException _mapFailure(DioException error, String fallback) =>
       error.error is AppException
-      ? error.error as AppException
-      : ServerException(fallback);
+          ? error.error as AppException
+          : ServerException(fallback);
 
   Map<String, dynamic> _asMap(dynamic value, String message) {
     if (value is Map) return Map<String, dynamic>.from(value);
@@ -106,8 +109,7 @@ class ApiOutboundRepository implements OutboundRepository {
         'Master data outbound tidak valid.',
       );
       final rawAvailableRacks = data['available_racks'];
-      final rawLocations =
-          data['locations'] ??
+      final rawLocations = data['locations'] ??
           data['available_locations'] ??
           (rawAvailableRacks is List &&
                   rawAvailableRacks.any((item) => item is Map)
@@ -170,32 +172,56 @@ class ApiOutboundRepository implements OutboundRepository {
         ApiEndpoints.outboundList(slug),
         queryParameters: filters,
       );
-      final envelope = _asMap(
-        response.data,
-        'Format daftar outbound tidak valid.',
-      );
-      _requireSuccess(envelope, 'Gagal memuat daftar manifes outbound.');
-      final data = envelope['data'];
-      final manifestContainer = data is Map ? data['manifests'] : data;
-      final manifests = _asList(manifestContainer, field: 'manifes outbound')
-          .whereType<Map>()
-          .map(
-            (item) => OutboundOrder.fromJson(Map<String, dynamic>.from(item)),
-          )
-          .toList();
-      final summaryValue = data is Map
-          ? (data['summary'] ?? data['stats'])
-          : null;
-      final summary = summaryValue is Map
-          ? Map<String, dynamic>.from(summaryValue)
-          : const <String, dynamic>{};
-      return OutboundListResult(
-        manifests: manifests,
-        stats: OutboundStats.fromJson(summary, manifests: manifests),
-      );
+      final result = _parseManifestList(response.data);
+      if (ownerKey != null) {
+        await OfflineDb.cacheListSnapshot(
+          tenantSlug: slug,
+          ownerKey: ownerKey!,
+          feature: 'outbound',
+          filters: filters,
+          payload: response.data,
+        );
+      }
+      return result;
     } on DioException catch (error) {
-      throw _mapFailure(error, 'Gagal memuat daftar manifes outbound.');
+      final failure =
+          _mapFailure(error, 'Gagal memuat daftar manifes outbound.');
+      if (failure is NetworkException && ownerKey != null) {
+        final cached = await OfflineDb.getCachedListSnapshot(
+          tenantSlug: slug,
+          ownerKey: ownerKey!,
+          feature: 'outbound',
+          filters: filters,
+        );
+        if (cached != null) return _parseManifestList(cached);
+      }
+      throw failure;
     }
+  }
+
+  OutboundListResult _parseManifestList(dynamic responseData) {
+    final envelope = _asMap(
+      responseData,
+      'Format daftar outbound tidak valid.',
+    );
+    _requireSuccess(envelope, 'Gagal memuat daftar manifes outbound.');
+    final data = envelope['data'];
+    final manifestContainer = data is Map ? data['manifests'] : data;
+    final manifests = _asList(manifestContainer, field: 'manifes outbound')
+        .whereType<Map>()
+        .map(
+          (item) => OutboundOrder.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+    final summaryValue =
+        data is Map ? (data['summary'] ?? data['stats']) : null;
+    final summary = summaryValue is Map
+        ? Map<String, dynamic>.from(summaryValue)
+        : const <String, dynamic>{};
+    return OutboundListResult(
+      manifests: manifests,
+      stats: OutboundStats.fromJson(summary, manifests: manifests),
+    );
   }
 
   @override
@@ -223,18 +249,17 @@ class ApiOutboundRepository implements OutboundRepository {
           .whereType<Map>()
           .map((item) => OutboundItem.fromJson(Map<String, dynamic>.from(item)))
           .toList();
-      final locations =
-          _asList(
-                data['locations'] ?? data['available_locations'],
-                field: 'lokasi outbound',
-              )
-              .whereType<Map>()
-              .map(
-                (item) =>
-                    OutboundLocation.fromJson(Map<String, dynamic>.from(item)),
-              )
-              .where((location) => location.rackCode.isNotEmpty)
-              .toList();
+      final locations = _asList(
+        data['locations'] ?? data['available_locations'],
+        field: 'lokasi outbound',
+      )
+          .whereType<Map>()
+          .map(
+            (item) =>
+                OutboundLocation.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .where((location) => location.rackCode.isNotEmpty)
+          .toList();
       manifestJson['items'] = rawItems;
       return OutboundManifestDetail(
         manifest: OutboundOrder.fromJson(manifestJson),
@@ -387,7 +412,14 @@ class ApiOutboundRepository implements OutboundRepository {
 }
 
 final outboundDataSourceProvider = Provider<OutboundRepository>((ref) {
-  return ApiOutboundRepository(ref.watch(dioProvider));
+  final auth = ref.watch(authProvider);
+  return ApiOutboundRepository(
+    ref.watch(dioProvider),
+    ownerKey: offlineOwnerKey(
+      userId: auth.userId,
+      token: auth.token ?? 'unauthenticated',
+    ),
+  );
 });
 
 class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
@@ -395,15 +427,19 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
     required OutboundRepository repository,
     required String tenantSlug,
     this.ownerKey = 'user:offline',
+    this.dio,
+    this.authToken = '',
     List<OutboundOrder> initialOrders = const [],
-  }) : _repository = repository,
-       _tenantSlug = tenantSlug,
-       stats = OutboundStats.fromManifests(initialOrders),
-       super(initialOrders);
+  })  : _repository = repository,
+        _tenantSlug = tenantSlug,
+        stats = OutboundStats.fromManifests(initialOrders),
+        super(initialOrders);
 
   final OutboundRepository _repository;
   final String _tenantSlug;
   final String ownerKey;
+  final Dio? dio;
+  final String authToken;
   OutboundStats stats;
 
   OutboundOrder? getOrderByCode(String code) {
@@ -443,7 +479,10 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
       state = [
         ...localOrders,
         ...result.manifests.where(
-          (remote) => !localOrders.any((local) => local.code == remote.code),
+          (remote) => !localOrders.any(
+            (local) =>
+                local.code == remote.code || local.localId == remote.code,
+          ),
         ),
       ];
     } on NetworkException {
@@ -454,11 +493,7 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
   }
 
   Future<OutboundManifestDetail> loadManifestDetail(String code) async {
-    final localRow = await OfflineDb.getOutboundQueueItem(
-      localUuid: code,
-      tenantSlug: _tenantSlug,
-      ownerKey: ownerKey,
-    );
+    final localRow = await _queueItemForCode(code);
     if (localRow != null) {
       final status = localRow['status'] as String;
       if (status != 'success') {
@@ -468,14 +503,18 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
       }
       final serverCode =
           localRow['server_manifest_code']?.toString().trim().isNotEmpty == true
-          ? localRow['server_manifest_code']!.toString()
-          : code;
-      final detail = await _repository.getManifestDetail(
-        _tenantSlug,
-        serverCode,
-      );
-      _replaceOrder(detail.manifest.copyWithItems(detail.items));
-      return detail;
+              ? localRow['server_manifest_code']!.toString()
+              : code;
+      try {
+        final detail = await _repository.getManifestDetail(
+          _tenantSlug,
+          serverCode,
+        );
+        _replaceOrder(detail.manifest.copyWithItems(detail.items));
+        return detail;
+      } on NetworkException {
+        return _localManifestDetail(localRow);
+      }
     }
     final detail = await _repository.getManifestDetail(_tenantSlug, code);
     _replaceOrder(detail.manifest.copyWithItems(detail.items));
@@ -522,7 +561,6 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
       driverName: driverName,
       notes: notes,
     );
-    await loadManifests();
   }
 
   Future<void> verifyBarcode(String code, String barcode) async {
@@ -547,9 +585,8 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
       }
       return;
     }
-    final manifestCode = row == null
-        ? code
-        : (row['server_manifest_code']?.toString() ?? code);
+    final manifestCode =
+        row == null ? code : (row['server_manifest_code']?.toString() ?? code);
     await _repository.verifyBarcode(
       _tenantSlug,
       manifestCode: manifestCode,
@@ -565,73 +602,299 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
     int? sourceRackId,
     String? sourceRack,
     String? damageNote,
+    OutboundManifestDetail? snapshot,
   }) async {
-    final row = await OfflineDb.getOutboundQueueItem(
-      localUuid: manifestCode,
-      tenantSlug: _tenantSlug,
-      ownerKey: ownerKey,
-    );
+    final row = await _queueItemForCode(manifestCode);
     if (row != null && row['status'] != 'success') {
-      final payload = decodeJsonMap(row['payload_json'] as String);
-      final items = (payload['items'] as List? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-      final index = int.tryParse(itemId.replaceFirst('local:', ''));
-      if (index == null || index < 0 || index >= items.length) {
-        throw const ServerException('Item outbound lokal tidak ditemukan.');
-      }
-      var cachedRack = sourceRack;
-      if (cachedRack == null && sourceRackId != null) {
-        for (final location in await _cachedLocations()) {
-          if (location.id == sourceRackId) {
-            cachedRack = location.rackCode;
-            break;
-          }
-        }
-      }
-      items[index] = {
-        ...items[index],
-        'good_qty': goodQty,
-        'damaged_qty': damagedQty,
-        'source_rack_id': sourceRackId == 0 ? null : sourceRackId,
-        'source_rack': cachedRack,
-        'damage_note': damageNote,
-      };
-      payload['items'] = items;
-      await OfflineDb.saveOutboundProgress(
-        localUuid: manifestCode,
-        tenantSlug: _tenantSlug,
-        ownerKey: ownerKey,
-        payload: payload,
-        metadata: decodeJsonMap(row['metadata_json'] as String),
+      final localUuid = row['local_uuid'] as String;
+      await _saveQueuedPicking(
+        localUuid: localUuid,
+        manifestCode:
+            decodeJsonMap(row['payload_json'] as String)['manifest_code']
+                    ?.toString() ??
+                manifestCode,
+        itemId: itemId,
+        goodQty: goodQty,
+        damagedQty: damagedQty,
+        sourceRackId: sourceRackId,
+        sourceRack: sourceRack,
+        damageNote: damageNote,
+        snapshot: snapshot,
+        existingRow: row,
       );
-      final detail = await _localManifestDetail({
-        ...row,
-        'payload_json': jsonEncodeMap(payload),
-        'status': 'pending',
-      });
-      _replaceOrder(detail.manifest);
+      if (await _trySync(localUuid)) {
+        await loadManifestDetail(manifestCode);
+      }
       return;
     }
     final serverCode = row == null
         ? manifestCode
         : row['server_manifest_code']?.toString() ?? manifestCode;
-    await _repository.updatePicking(
-      slug: _tenantSlug,
-      manifestCode: serverCode,
-      itemId: int.parse(itemId),
-      goodQty: goodQty,
-      damagedQty: damagedQty,
-      sourceRackId: sourceRackId,
-      damageNote: damageNote,
-    );
-    await loadManifestDetail(serverCode);
+    try {
+      await _repository.updatePicking(
+        slug: _tenantSlug,
+        manifestCode: serverCode,
+        itemId: int.parse(itemId),
+        goodQty: goodQty,
+        damagedQty: damagedQty,
+        sourceRackId: sourceRackId,
+        damageNote: damageNote,
+      );
+      await loadManifestDetail(serverCode);
+    } on NetworkException {
+      if (snapshot == null) rethrow;
+      final localUuid = _offlineManifestId(serverCode);
+      await _saveQueuedPicking(
+        localUuid: localUuid,
+        manifestCode: serverCode,
+        itemId: itemId,
+        goodQty: goodQty,
+        damagedQty: damagedQty,
+        sourceRackId: sourceRackId,
+        sourceRack: sourceRack,
+        damageNote: damageNote,
+        snapshot: snapshot,
+        existingRow: row != null && row['local_uuid'] == localUuid ? row : null,
+      );
+      if (await _trySync(localUuid)) {
+        await loadManifestDetail(manifestCode);
+      }
+    }
   }
 
-  Future<void> commitOutboundApi(String manifestCode) async {
-    final serverCode = await _serverManifestCode(manifestCode);
-    await _repository.commitOutbound(_tenantSlug, serverCode);
-    await loadManifests();
+  Future<bool> commitOutboundApi(
+    String manifestCode, {
+    OutboundManifestDetail? snapshot,
+  }) async {
+    final row = await _queueItemForCode(manifestCode);
+    if (row != null && row['status'] != 'success') {
+      final localUuid = row['local_uuid'] as String;
+      final payload = decodeJsonMap(row['payload_json'] as String)
+        ..['should_commit'] = true;
+      await OfflineDb.saveOutboundProgress(
+        localUuid: localUuid,
+        tenantSlug: _tenantSlug,
+        ownerKey: ownerKey,
+        payload: payload,
+        metadata: decodeJsonMap(row['metadata_json'] as String),
+      );
+      final synced = await _trySync(localUuid);
+      await loadManifests();
+      return synced;
+    }
+
+    final serverCode = row?['server_manifest_code']?.toString() ??
+        (manifestCode.startsWith('LOCAL-') ? null : manifestCode);
+    if (serverCode == null) {
+      throw const NetworkException(
+        'Manifes outbound lokal harus disinkronkan sebelum commit.',
+      );
+    }
+    try {
+      await _repository.commitOutbound(_tenantSlug, serverCode);
+      await loadManifests();
+      return true;
+    } on NetworkException {
+      if (snapshot == null || snapshot.items.isEmpty) rethrow;
+      final localUuid = _offlineManifestId(serverCode);
+      final item = snapshot.items.first;
+      await _saveQueuedPicking(
+        localUuid: localUuid,
+        manifestCode: serverCode,
+        itemId: item.id,
+        goodQty: item.pickedQty,
+        damagedQty: item.damagedQty,
+        sourceRackId: item.sourceRackId,
+        sourceRack: item.fromRack,
+        damageNote: item.notes,
+        snapshot: snapshot,
+        shouldCommit: true,
+        existingRow: row != null && row['local_uuid'] == localUuid ? row : null,
+      );
+      final synced = await _trySync(localUuid);
+      await loadManifests();
+      return synced;
+    }
+  }
+
+  Future<Map<String, Object?>?> _queueItemForCode(String code) async {
+    final direct = await OfflineDb.getOutboundQueueItem(
+      localUuid: code,
+      tenantSlug: _tenantSlug,
+      ownerKey: ownerKey,
+    );
+    if (direct != null) return direct;
+    return OfflineDb.getOutboundQueueItem(
+      localUuid: _offlineManifestId(code),
+      tenantSlug: _tenantSlug,
+      ownerKey: ownerKey,
+    );
+  }
+
+  String _offlineManifestId(String manifestCode) =>
+      'OUTBOUND-MANIFEST-$manifestCode';
+
+  Future<void> _saveQueuedPicking({
+    required String localUuid,
+    required String manifestCode,
+    required String itemId,
+    required int goodQty,
+    required int damagedQty,
+    required int? sourceRackId,
+    required String? sourceRack,
+    required String? damageNote,
+    required OutboundManifestDetail? snapshot,
+    Map<String, Object?>? existingRow,
+    bool shouldCommit = false,
+  }) async {
+    if (existingRow == null && snapshot == null) {
+      throw const NetworkException(
+        'Detail manifes outbound belum tersedia untuk disimpan offline.',
+      );
+    }
+    final oldPayload = existingRow == null
+        ? <String, dynamic>{}
+        : decodeJsonMap(existingRow['payload_json'] as String);
+    final oldMetadata = existingRow == null
+        ? <String, dynamic>{}
+        : decodeJsonMap(existingRow['metadata_json'] as String);
+    final metadataItems = (oldMetadata['items'] as List? ??
+            snapshot?.items.map(_outboundMetadataItem).toList() ??
+            const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    final payloadItems = (oldPayload['items'] as List? ??
+            snapshot?.items.map(_outboundPayloadItem).toList() ??
+            const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    var index = metadataItems.indexWhere(
+      (item) => item['id']?.toString() == itemId,
+    );
+    if (index < 0 && itemId.startsWith('local:')) {
+      index = int.tryParse(itemId.replaceFirst('local:', '')) ?? -1;
+    }
+    if (index < 0 && snapshot != null) {
+      index = snapshot.items.indexWhere((item) => item.id == itemId);
+    }
+    if (index < 0 || index >= payloadItems.length) {
+      throw const ServerException('Item manifes outbound tidak ditemukan.');
+    }
+    var rack = sourceRack;
+    if (rack == null && sourceRackId != null) {
+      for (final location in snapshot?.locations ?? await _cachedLocations()) {
+        if (location.id == sourceRackId) {
+          rack = location.rackCode;
+          break;
+        }
+      }
+    }
+    payloadItems[index] = {
+      ...payloadItems[index],
+      'good_qty': goodQty,
+      'damaged_qty': damagedQty,
+      'source_rack_id': sourceRackId == 0 ? null : sourceRackId,
+      'source_rack': rack,
+      'damage_note': damageNote,
+    };
+    metadataItems[index] = {
+      ...metadataItems[index],
+      'good_qty': goodQty,
+      'damaged_qty': damagedQty,
+      'source_rack_id': sourceRackId == 0 ? null : sourceRackId,
+      'source_rack': rack,
+      'damage_note': damageNote,
+    };
+    final manifest = snapshot?.manifest;
+    final payload = <String, dynamic>{
+      ...oldPayload,
+      'manifest_code': manifestCode,
+      'local_uuid': localUuid,
+      'transaction_uuid': oldPayload['transaction_uuid'] ?? localUuid,
+      'should_commit': shouldCommit || oldPayload['should_commit'] == true,
+      if (manifest != null && manifest.customerId > 0)
+        'customer_id': manifest.customerId,
+      'items': payloadItems,
+    };
+    final metadata = <String, dynamic>{
+      ...oldMetadata,
+      if (manifest != null) 'customer_name': manifest.customer,
+      if (manifest != null) 'status': manifest.status.label,
+      if (manifest != null) 'total_units': manifest.totalOrderUnits,
+      if (manifest != null) 'vehicle_no': manifest.vehicleNo,
+      if (manifest != null) 'driver_name': manifest.driverName,
+      if (manifest != null) 'notes': manifest.notes,
+      if (snapshot != null)
+        'locations':
+            snapshot.locations.map((location) => location.toJson()).toList(),
+      'items': metadataItems,
+    };
+    if (existingRow == null) {
+      await OfflineDb.enqueueOutbound(
+        localUuid: localUuid,
+        tenantSlug: _tenantSlug,
+        ownerKey: ownerKey,
+        payload: payload,
+        metadata: metadata,
+      );
+    } else {
+      await OfflineDb.saveOutboundProgress(
+        localUuid: localUuid,
+        tenantSlug: _tenantSlug,
+        ownerKey: ownerKey,
+        payload: payload,
+        metadata: metadata,
+      );
+    }
+    final savedRow = await OfflineDb.getOutboundQueueItem(
+      localUuid: localUuid,
+      tenantSlug: _tenantSlug,
+      ownerKey: ownerKey,
+    );
+    if (savedRow != null) {
+      _replaceOrder((await _localManifestDetail(savedRow)).manifest);
+    }
+  }
+
+  Map<String, dynamic> _outboundPayloadItem(OutboundItem item) => {
+        'sku_id': item.skuId,
+        'so_qty': item.orderQty,
+        'good_qty': item.pickedQty,
+        'damaged_qty': item.damagedQty,
+        if (item.sourceRackId != null) 'source_rack_id': item.sourceRackId,
+        if (item.fromRack.isNotEmpty) 'source_rack': item.fromRack,
+        if (item.notes != null) 'damage_note': item.notes,
+      };
+
+  Map<String, dynamic> _outboundMetadataItem(OutboundItem item) => {
+        'id': item.id,
+        'sku_id': item.skuId,
+        'sku': item.sku,
+        'barcode': item.barcode,
+        'product_name': item.name,
+        'so_qty': item.orderQty,
+        'good_qty': item.pickedQty,
+        'damaged_qty': item.damagedQty,
+        if (item.sourceRackId != null) 'source_rack_id': item.sourceRackId,
+        if (item.fromRack.isNotEmpty) 'source_rack': item.fromRack,
+        if (item.notes != null) 'damage_note': item.notes,
+      };
+
+  Future<bool> _trySync(String localUuid) async {
+    final syncDio = dio;
+    if (syncDio == null ||
+        authToken.isEmpty ||
+        !await ConnectivityChecker.instance.isOnline()) {
+      return false;
+    }
+    final result = await SyncManager.instance.syncOutboundQueue(
+      dio: syncDio,
+      tenantSlug: _tenantSlug,
+      ownerKey: ownerKey,
+      authToken: authToken,
+      localUuid: localUuid,
+    );
+    return result.syncedCount == 1 && result.failures.isEmpty;
   }
 
   Future<void> holdManifest(String code, {String? reason}) async {
@@ -693,56 +956,56 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
         OutboundItem.fromJson({
           ...metadataItem,
           ...payloadItem,
-          'id': 'local:$index',
+          'id': metadataItem['id']?.toString() ?? 'local:$index',
         }),
       );
     }
-    final locationMaps = await _cachedLocations();
+    final metadataLocations = metadata['locations'] as List? ?? const [];
+    final locationMaps = metadataLocations
+        .whereType<Map>()
+        .map((item) =>
+            OutboundLocation.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
+    final locations =
+        locationMaps.isEmpty ? await _cachedLocations() : locationMaps;
     final localUuid = row['local_uuid'] as String;
     final customerName = metadata['customer_name']?.toString() ?? 'Customer';
+    final manifestCode = payload['manifest_code']?.toString() ?? localUuid;
     final order = OutboundOrder(
-      code: localUuid,
+      code: manifestCode,
       customer: customerName,
       customerId: int.tryParse(payload['customer_id'].toString()) ?? 0,
-      vehicleNo: payload['vehicle_no']?.toString(),
-      driverName: payload['driver_name']?.toString(),
-      notes: payload['notes']?.toString(),
+      vehicleNo: (payload['vehicle_no'] ?? metadata['vehicle_no'])?.toString(),
+      driverName:
+          (payload['driver_name'] ?? metadata['driver_name'])?.toString(),
+      notes: (payload['notes'] ?? metadata['notes'])?.toString(),
       totalUnits: items.fold<int>(0, (total, item) => total + item.orderQty),
       totalSkus: items.length,
       destination: '',
       expedition: payload['vehicle_no']?.toString() ?? '',
       stagingBay: '-',
-      status: OutboundStatus.readyToPick,
+      status: OutboundStatus.fromString(metadata['status']?.toString()),
       items: items,
       startedAt: row['created_at']?.toString(),
-      isOfflinePending: true,
+      isOfflinePending: row['status'] != 'success',
       localId: localUuid,
       syncError: row['error_message']?.toString(),
     );
     return OutboundManifestDetail(
       manifest: order,
       items: items,
-      locations: locationMaps,
+      locations: locations,
     );
   }
 
   Future<void> _cacheLocations(List<OutboundLocation> locations) async {
-    final cached =
-        await OfflineDb.getCachedOutboundOptions(
+    final cached = await OfflineDb.getCachedOutboundOptions(
           tenantSlug: _tenantSlug,
           ownerKey: ownerKey,
         ) ??
         <String, dynamic>{};
-    cached['locations'] = locations
-        .map(
-          (location) => {
-            'id': location.id,
-            'rack_code': location.rackCode,
-            'zone': location.zone,
-            'stock_quantity': location.stockQuantity,
-          },
-        )
-        .toList();
+    cached['locations'] =
+        locations.map((location) => location.toJson()).toList();
     await OfflineDb.cacheOutboundOptions(
       tenantSlug: _tenantSlug,
       ownerKey: ownerKey,
@@ -772,34 +1035,26 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
   }
 
   Map<String, dynamic> _masterOptionsJson(OutboundMasterOptions options) => {
-    'customers': options.customers
-        .map((item) => {'id': item.id, 'name': item.name, 'code': item.code})
-        .toList(),
-    'products': options.products
-        .map(
-          (item) => {
-            'sku_id': item.skuId,
-            'product_id': item.productId,
-            'sku': item.sku,
-            'barcode': item.barcode,
-            'name': item.name,
-            'available_stock': item.availableStock,
-            'unit': item.unit,
-          },
-        )
-        .toList(),
-    'locations': options.locations
-        .map(
-          (item) => {
-            'id': item.id,
-            'rack_code': item.rackCode,
-            'zone': item.zone,
-            'stock_quantity': item.stockQuantity,
-          },
-        )
-        .toList(),
-    'available_racks': options.availableRacks,
-  };
+        'customers': options.customers
+            .map(
+                (item) => {'id': item.id, 'name': item.name, 'code': item.code})
+            .toList(),
+        'products': options.products
+            .map(
+              (item) => {
+                'sku_id': item.skuId,
+                'product_id': item.productId,
+                'sku': item.sku,
+                'barcode': item.barcode,
+                'name': item.name,
+                'available_stock': item.availableStock,
+                'unit': item.unit,
+              },
+            )
+            .toList(),
+        'locations': options.locations.map((item) => item.toJson()).toList(),
+        'available_racks': options.availableRacks,
+      };
 
   OutboundMasterOptions _masterOptionsFromJson(Map<String, dynamic> json) {
     final customers = (json['customers'] as List? ?? const [])
@@ -845,17 +1100,18 @@ class OutboundNotifier extends StateNotifier<List<OutboundOrder>> {
 
 final outboundRepositoryProvider =
     StateNotifierProvider<OutboundNotifier, List<OutboundOrder>>((ref) {
-      final authState = ref.watch(authProvider);
-      return OutboundNotifier(
-        repository: ref.watch(outboundDataSourceProvider),
-        tenantSlug:
-            authState.tenantSlug ?? authState.tenantName ?? 'demo-tenant',
-        ownerKey: offlineOwnerKey(
-          userId: authState.userId,
-          token: authState.token ?? 'unauthenticated',
-        ),
-      );
-    });
+  final authState = ref.watch(authProvider);
+  return OutboundNotifier(
+    repository: ref.watch(outboundDataSourceProvider),
+    tenantSlug: authState.tenantSlug ?? authState.tenantName ?? 'demo-tenant',
+    ownerKey: offlineOwnerKey(
+      userId: authState.userId,
+      token: authState.token ?? 'unauthenticated',
+    ),
+    dio: ref.watch(dioProvider),
+    authToken: authState.token ?? '',
+  );
+});
 
 final outboundStatsProvider = Provider<OutboundStats>((ref) {
   ref.watch(outboundRepositoryProvider);

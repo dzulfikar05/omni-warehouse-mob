@@ -10,6 +10,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/offline/offline_db.dart';
 import '../../core/offline/offline_identity.dart';
 import '../../core/offline/sync_manager.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import 'transfer_local_id.dart';
 import 'transfer_transaction_model.dart';
 
@@ -45,9 +46,10 @@ abstract class TransferTransactionRepository {
 
 class ApiTransferTransactionRepository
     implements TransferTransactionRepository {
-  ApiTransferTransactionRepository(this._dio);
+  ApiTransferTransactionRepository(this._dio, {this.ownerKey});
 
   final Dio _dio;
+  final String? ownerKey;
 
   AppException _mapFailure(DioException error, String fallback) {
     if (error.error is ValidationException) {
@@ -170,46 +172,68 @@ class ApiTransferTransactionRepository
         ApiEndpoints.transferList(slug),
         queryParameters: filters,
       );
-      final envelope = _asMap(
-        response.data,
-        'Format daftar mutasi stok tidak valid.',
-      );
-      _requireSuccess(envelope, 'Gagal memuat daftar mutasi stok.');
-      final rawData = envelope['data'];
-      final data = rawData is Map
-          ? Map<String, dynamic>.from(rawData)
-          : <String, dynamic>{};
-      final rawTransactions = rawData is List
-          ? rawData
-          : data['transfers'] ??
-                data['transactions'] ??
-                data['transfer_logs'] ??
-                data['logs'] ??
-                data['stock_transfers'] ??
-                data['data'];
-      final transactions = _asList(rawTransactions, 'transaksi mutasi stok')
-          .whereType<Map>()
-          .map((item) {
-            return TransferTransaction.fromJson(
-              Map<String, dynamic>.from(item),
-            );
-          })
-          .toList();
-      final rawStats = data['summary'] ?? data['stats'];
-      final summary = rawStats is Map
-          ? Map<String, dynamic>.from(rawStats)
-          : const <String, dynamic>{};
-
-      return TransferTransactionListResult(
-        transactions: transactions,
-        stats: TransferTransactionStats.fromJson(
-          summary,
-          transactions: transactions,
-        ),
-      );
+      final result = _parseTransactions(response.data);
+      if (ownerKey != null) {
+        await OfflineDb.cacheListSnapshot(
+          tenantSlug: slug,
+          ownerKey: ownerKey!,
+          feature: 'transfer',
+          filters: filters,
+          payload: response.data,
+        );
+      }
+      return result;
     } on DioException catch (error) {
-      throw _mapFailure(error, 'Gagal memuat daftar mutasi stok.');
+      final failure = _mapFailure(error, 'Gagal memuat daftar mutasi stok.');
+      if (failure is NetworkException && ownerKey != null) {
+        final cached = await OfflineDb.getCachedListSnapshot(
+          tenantSlug: slug,
+          ownerKey: ownerKey!,
+          feature: 'transfer',
+          filters: filters,
+        );
+        if (cached != null) return _parseTransactions(cached);
+      }
+      throw failure;
     }
+  }
+
+  TransferTransactionListResult _parseTransactions(dynamic responseData) {
+    final envelope = _asMap(
+      responseData,
+      'Format daftar mutasi stok tidak valid.',
+    );
+    _requireSuccess(envelope, 'Gagal memuat daftar mutasi stok.');
+    final rawData = envelope['data'];
+    final data = rawData is Map
+        ? Map<String, dynamic>.from(rawData)
+        : <String, dynamic>{};
+    final rawTransactions = rawData is List
+        ? rawData
+        : data['transfers'] ??
+            data['transactions'] ??
+            data['transfer_logs'] ??
+            data['logs'] ??
+            data['stock_transfers'] ??
+            data['data'];
+    final transactions = _asList(rawTransactions, 'transaksi mutasi stok')
+        .whereType<Map>()
+        .map(
+          (item) =>
+              TransferTransaction.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+    final rawStats = data['summary'] ?? data['stats'];
+    final summary = rawStats is Map
+        ? Map<String, dynamic>.from(rawStats)
+        : const <String, dynamic>{};
+    return TransferTransactionListResult(
+      transactions: transactions,
+      stats: TransferTransactionStats.fromJson(
+        summary,
+        transactions: transactions,
+      ),
+    );
   }
 
   @override
@@ -374,6 +398,15 @@ class OfflineTransferTransactionRepository
     };
     final metadata = await _metadataForPayload(slug, payload)
       ..['local_id'] = localId;
+    try {
+      return await api.createTransaction(
+        slug,
+        items: normalizedItems,
+        notes: notes,
+      );
+    } on NetworkException {
+      // Retain the transaction locally only when the direct API call is offline.
+    }
     await OfflineDb.enqueueTransfer(
       localUuid: localUuid,
       tenantSlug: slug,
@@ -382,7 +415,6 @@ class OfflineTransferTransactionRepository
       metadata: metadata,
       createdAt: createdAt,
     );
-    await _trySync(slug, localUuid);
     return localUuid;
   }
 
@@ -468,7 +500,7 @@ class OfflineTransferTransactionRepository
 
   Future<void> _trySync(String slug, String localId) async {
     if (authToken.isEmpty ||
-        !await SyncManager.instance.shouldSyncAutomatically()) {
+        !await ConnectivityChecker.instance.isOnline()) {
       return;
     }
     await SyncManager.instance.syncTransferQueue(
@@ -731,7 +763,10 @@ final transferTransactionRepositoryProvider =
       final auth = ref.watch(authProvider);
       final token = auth.token ?? '';
       return OfflineTransferTransactionRepository(
-        api: ApiTransferTransactionRepository(dio),
+        api: ApiTransferTransactionRepository(
+          dio,
+          ownerKey: offlineOwnerKey(userId: auth.userId, token: token),
+        ),
         dio: dio,
         ownerKey: offlineOwnerKey(userId: auth.userId, token: token),
         authToken: token,

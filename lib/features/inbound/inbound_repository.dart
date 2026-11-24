@@ -7,6 +7,8 @@ import '../../core/api/api_exception.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/offline/offline_db.dart';
 import '../../core/offline/offline_identity.dart';
+import '../../core/offline/sync_manager.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import 'inbound_model.dart';
 
 class InboundMasterOptions {
@@ -39,7 +41,7 @@ abstract class InboundRepository {
     String slug, {
     required String localUuid,
     required int supplierId,
-    required List<Map<String, int>> items,
+    required List<Map<String, dynamic>> items,
   });
   Future<void> verifyBarcode(
     String slug, {
@@ -61,9 +63,10 @@ abstract class InboundRepository {
 }
 
 class ApiInboundRepository implements InboundRepository {
-  ApiInboundRepository(this._dio);
+  ApiInboundRepository(this._dio, {this.ownerKey});
 
   final Dio _dio;
+  final String? ownerKey;
 
   AppException _mapFailure(DioException error, String fallback) {
     return error.error is AppException
@@ -121,43 +124,64 @@ class ApiInboundRepository implements InboundRepository {
         ApiEndpoints.inboundList(slug),
         queryParameters: filters,
       );
-      final envelope = _asMap(
-        response.data,
-        'Format daftar inbound tidak valid.',
-      );
-      final data = _asMap(envelope['data'], 'Data daftar inbound tidak valid.');
-      final rawManifestPage = data['manifests'];
-      final rawManifests = rawManifestPage is List
-          ? rawManifestPage
-          : rawManifestPage is Map
-              ? rawManifestPage['data']
-              : null;
-
-      if (rawManifests is! List) {
-        throw const ServerException(
-          'Format halaman daftar manifes dari server tidak valid.',
+      final result = _parseManifestList(response.data);
+      if (ownerKey != null) {
+        await OfflineDb.cacheListSnapshot(
+          tenantSlug: slug,
+          ownerKey: ownerKey!,
+          feature: 'inbound',
+          filters: filters,
+          payload: response.data,
         );
       }
-
-      final manifests = rawManifests
-          .map(
-            (item) => InboundManifest.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList();
-      final rawSummary = data['summary'];
-      final summary = rawSummary is Map
-          ? Map<String, dynamic>.from(rawSummary)
-          : const <String, dynamic>{};
-
-      return InboundListResult(
-        manifests: manifests,
-        stats: InboundStats.fromJson(summary, manifests: manifests),
-      );
+      return result;
     } on DioException catch (error) {
-      throw _mapFailure(error, 'Gagal mengambil daftar manifes.');
+      final failure = _mapFailure(error, 'Gagal mengambil daftar manifes.');
+      if (failure is NetworkException && ownerKey != null) {
+        final cached = await OfflineDb.getCachedListSnapshot(
+          tenantSlug: slug,
+          ownerKey: ownerKey!,
+          feature: 'inbound',
+          filters: filters,
+        );
+        if (cached != null) return _parseManifestList(cached);
+      }
+      throw failure;
     }
+  }
+
+  InboundListResult _parseManifestList(dynamic responseData) {
+    final envelope = _asMap(responseData, 'Format daftar inbound tidak valid.');
+    final data = _asMap(envelope['data'], 'Data daftar inbound tidak valid.');
+    final rawManifestPage = data['manifests'];
+    final rawManifests = rawManifestPage is List
+        ? rawManifestPage
+        : rawManifestPage is Map
+            ? rawManifestPage['data']
+            : null;
+
+    if (rawManifests is! List) {
+      throw const ServerException(
+        'Format halaman daftar manifes dari server tidak valid.',
+      );
+    }
+
+    final manifests = rawManifests
+        .map(
+          (item) => InboundManifest.fromJson(
+            Map<String, dynamic>.from(item as Map),
+          ),
+        )
+        .toList();
+    final rawSummary = data['summary'];
+    final summary = rawSummary is Map
+        ? Map<String, dynamic>.from(rawSummary)
+        : const <String, dynamic>{};
+
+    return InboundListResult(
+      manifests: manifests,
+      stats: InboundStats.fromJson(summary, manifests: manifests),
+    );
   }
 
   @override
@@ -209,10 +233,10 @@ class ApiInboundRepository implements InboundRepository {
     String slug, {
     required String localUuid,
     required int supplierId,
-    required List<Map<String, int>> items,
+    required List<Map<String, dynamic>> items,
   }) async {
     try {
-      await _dio.post(
+      final response = await _dio.post(
         ApiEndpoints.inboundCreate(slug),
         data: {
           'local_uuid': localUuid,
@@ -220,6 +244,12 @@ class ApiInboundRepository implements InboundRepository {
           'items': items,
         },
       );
+      if (response.data is Map && response.data['success'] == false) {
+        throw ServerException(
+          response.data['message']?.toString() ??
+              'Gagal membuat manifes baru.',
+        );
+      }
     } on DioException catch (error) {
       throw _mapFailure(error, 'Gagal membuat manifes baru.');
     }
@@ -320,12 +350,24 @@ class ApiInboundRepository implements InboundRepository {
 }
 
 final inboundDataSourceProvider = Provider<InboundRepository>((ref) {
-  return ApiInboundRepository(ref.watch(dioProvider));
+  final auth = ref.watch(authProvider);
+  return ApiInboundRepository(
+    ref.watch(dioProvider),
+    ownerKey: offlineOwnerKey(
+      userId: auth.userId,
+      token: auth.token ?? 'unauthenticated',
+    ),
+  );
 });
 
 class InboundNotifier extends StateNotifier<List<InboundManifest>> {
-  InboundNotifier(this._repository, this._tenantSlug, this._ownerKey)
-      : stats = const InboundStats(
+  InboundNotifier(
+    this._repository,
+    this._tenantSlug,
+    this._ownerKey, {
+    this.dio,
+    this.authToken = '',
+  })  : stats = const InboundStats(
           todayTotal: 0,
           inProgress: 0,
           completed: 0,
@@ -336,19 +378,29 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
   final InboundRepository _repository;
   final String _tenantSlug;
   final String _ownerKey;
+  final Dio? dio;
+  final String authToken;
   InboundStats stats;
 
   Future<void> loadManifests() async {
     final pending = await _localManifests();
     try {
       final result = await _repository.getManifests(_tenantSlug);
+      final localDrafts = pending
+          .where((manifest) => manifest.code.startsWith('LOCAL-'))
+          .length;
       stats = InboundStats(
-        todayTotal: result.stats.todayTotal + pending.length,
-        inProgress: result.stats.inProgress + pending.length,
+        todayTotal: result.stats.todayTotal + localDrafts,
+        inProgress: result.stats.inProgress + localDrafts,
         completed: result.stats.completed,
         hold: result.stats.hold,
       );
-      state = [...pending, ...result.manifests];
+      state = [
+        ...pending,
+        ...result.manifests.where(
+          (remote) => !pending.any((local) => local.code == remote.code),
+        ),
+      ];
     } on NetworkException {
       stats = InboundStats(
         todayTotal: pending.length,
@@ -389,36 +441,58 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
     );
   }
 
+  Future<void> createManifest({
+    required String localUuid,
+    required int supplierId,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    await _repository.createManifest(
+      _tenantSlug,
+      localUuid: localUuid,
+      supplierId: supplierId,
+      items: items,
+    );
+  }
+
   Future<List<InboundManifest>> _localManifests() async {
     final rows = await OfflineDb.getInboundManifests(
       tenantSlug: _tenantSlug,
       ownerKey: _ownerKey,
     );
     return rows.map((row) {
+      final payload = decodeJsonMap(row['payload_json'] as String);
       final metadata = decodeJsonMap(row['metadata_json'] as String);
-      final rawItems = metadata['items'] as List? ?? const [];
+      final rawItems =
+          metadata['items'] as List? ?? payload['items'] as List? ?? const [];
       final items = rawItems.map((rawItem) {
         final item = Map<String, dynamic>.from(rawItem as Map);
         return InboundItem(
-          id: item['sku_id'].toString(),
-          productId: int.tryParse(item['sku_id'].toString()) ?? 0,
+          id: (item['id'] ?? item['sku_id']).toString(),
+          productId: int.tryParse((item['sku_id'] ?? '').toString()) ?? 0,
           sku: item['sku']?.toString() ?? '',
           barcode: item['barcode']?.toString() ?? '',
           name: item['name']?.toString() ?? 'Barang Inbound',
-          expectedQty: int.tryParse(item['po_qty'].toString()) ?? 0,
-          goodQty: int.tryParse(item['good_qty'].toString()) ?? 0,
-          damagedQty: int.tryParse(item['damaged_qty'].toString()) ?? 0,
+          expectedQty: int.tryParse(
+                  (item['po_qty'] ?? item['expected_qty']).toString()) ??
+              0,
+          goodQty: int.tryParse((item['good_qty'] ?? 0).toString()) ?? 0,
+          damagedQty: int.tryParse((item['damaged_qty'] ?? 0).toString()) ?? 0,
           targetRack: item['target_rack']?.toString(),
           notes: item['damage_note']?.toString(),
         );
       }).toList();
       final localUuid = row['local_uuid'] as String;
+      final manifestCode = payload['manifest_code']?.toString();
       return InboundManifest(
-        code: localUuid,
-        supplierId: int.tryParse(metadata['supplier_id'].toString()) ?? 0,
+        code: manifestCode ?? 'LOCAL-$localUuid',
+        supplierId: int.tryParse(
+                (metadata['supplier_id'] ?? payload['supplier_id'] ?? 0)
+                    .toString()) ??
+            0,
         supplierName: metadata['supplier_name']?.toString() ?? 'Supplier',
-        totalUnits: items.fold(0, (total, item) => total + item.expectedQty),
-        status: InboundStatus.draft,
+        totalUnits: int.tryParse((metadata['total_units'] ?? '').toString()) ??
+            items.fold(0, (total, item) => total + item.expectedQty),
+        status: InboundStatus.fromString(metadata['status']?.toString()),
         items: items,
         totalSkus: items.length,
         isOfflinePending: true,
@@ -429,16 +503,33 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
   }
 
   Future<InboundManifestDetail> loadManifestDetail(String code) async {
-    if (!code.startsWith('LOCAL-')) {
-      return _repository.getManifestDetail(_tenantSlug, code);
-    }
-
-    final localUuid = code.substring('LOCAL-'.length);
+    final localUuid = code.startsWith('LOCAL-')
+        ? code.substring('LOCAL-'.length)
+        : _offlineManifestId(code);
     final row = await OfflineDb.getInboundQueueItem(
       localUuid: localUuid,
       tenantSlug: _tenantSlug,
       ownerKey: _ownerKey,
     );
+    if (row != null) {
+      if (row['status'] != 'success') {
+        return _queuedManifestDetail(row);
+      }
+      if (code.startsWith('LOCAL-')) {
+        final serverCode = row['server_manifest_code']?.toString();
+        if (serverCode != null) {
+          return _repository.getManifestDetail(_tenantSlug, serverCode);
+        }
+      }
+    }
+    if (!code.startsWith('LOCAL-')) {
+      try {
+        return await _repository.getManifestDetail(_tenantSlug, code);
+      } on NetworkException {
+        if (row != null) return _queuedManifestDetail(row);
+        rethrow;
+      }
+    }
     if (row == null) {
       throw const ServerException('Manifes lokal tidak ditemukan.');
     }
@@ -448,6 +539,12 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
       return _repository.getManifestDetail(_tenantSlug, serverCode);
     }
 
+    return _queuedManifestDetail(row);
+  }
+
+  Future<InboundManifestDetail> _queuedManifestDetail(
+    Map<String, Object?> row,
+  ) async {
     final payload = decodeJsonMap(row['payload_json'] as String);
     final metadata = decodeJsonMap(row['metadata_json'] as String);
     final payloadItems = payload['items'] as List? ?? const [];
@@ -458,51 +555,73 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
       final payloadItem = index < payloadItems.length
           ? Map<String, dynamic>.from(payloadItems[index] as Map)
           : metadataItem;
-      final skuId = payloadItem['sku_id'] ?? metadataItem['sku_id'];
       return InboundItem(
-        id: 'local:$index',
-        productId: int.tryParse(skuId.toString()) ?? 0,
+        id: (metadataItem['id'] ?? 'local:$index').toString(),
+        productId: int.tryParse(
+              (payloadItem['sku_id'] ?? metadataItem['sku_id'] ?? '')
+                  .toString(),
+            ) ??
+            0,
         sku: metadataItem['sku']?.toString() ?? '',
         barcode: metadataItem['barcode']?.toString() ?? '',
         name: metadataItem['name']?.toString() ?? 'Barang Inbound',
-        expectedQty: int.tryParse(payloadItem['po_qty']?.toString() ?? '') ?? 0,
-        goodQty: int.tryParse(payloadItem['good_qty']?.toString() ?? '') ?? 0,
+        expectedQty: int.tryParse(
+              (payloadItem['po_qty'] ?? metadataItem['po_qty'] ?? '')
+                  .toString(),
+            ) ??
+            0,
+        goodQty: int.tryParse((payloadItem['good_qty'] ?? 0).toString()) ?? 0,
         damagedQty:
-            int.tryParse(payloadItem['damaged_qty']?.toString() ?? '') ?? 0,
+            int.tryParse((payloadItem['damaged_qty'] ?? 0).toString()) ?? 0,
         targetRack: payloadItem['target_rack']?.toString(),
         notes: payloadItem['damage_note']?.toString(),
       );
     });
-    final cachedOptions = await OfflineDb.getCachedInboundOptions(
-      tenantSlug: _tenantSlug,
-      ownerKey: _ownerKey,
-    );
-    final racks = (cachedOptions?['available_racks'] as List? ?? const [])
-        .map((rack) => rack.toString())
+    var rawLocations = metadata['locations'] as List? ?? const [];
+    if (rawLocations.isEmpty) {
+      final cachedOptions = await OfflineDb.getCachedInboundOptions(
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+      );
+      rawLocations = cachedOptions?['available_racks'] as List? ?? const [];
+    }
+    final locations = rawLocations
+        .whereType<Map>()
+        .map(
+            (item) => InboundLocation.fromJson(Map<String, dynamic>.from(item)))
         .toList();
-
-    return InboundManifestDetail(
-      manifest: InboundManifest(
-        code: localUuid,
-        supplierId: int.tryParse(payload['supplier_id'].toString()) ?? 0,
-        supplierName: metadata['supplier_name']?.toString() ?? 'Supplier',
-        totalUnits: items.fold(0, (total, item) => total + item.expectedQty),
-        status: InboundStatus.draft,
-        items: items,
-        totalSkus: items.length,
-        isOfflinePending: true,
-        localUuid: localUuid,
-        syncError: row['error_message']?.toString(),
-      ),
-      items: items,
-      locations: racks
-          .asMap()
-          .entries
-          .map((entry) => InboundLocation(
+    if (locations.isEmpty) {
+      locations.addAll(
+        rawLocations.asMap().entries.map(
+              (entry) => InboundLocation(
                 id: entry.key,
-                rackCode: entry.value,
-              ))
-          .toList(),
+                rackCode: entry.value.toString(),
+              ),
+            ),
+      );
+    }
+    final localUuid = row['local_uuid'] as String;
+    final code = payload['manifest_code']?.toString() ?? localUuid;
+    final manifest = InboundManifest(
+      code: code,
+      supplierId: int.tryParse(
+            (metadata['supplier_id'] ?? payload['supplier_id'] ?? 0).toString(),
+          ) ??
+          0,
+      supplierName: metadata['supplier_name']?.toString() ?? 'Supplier',
+      totalUnits: int.tryParse((metadata['total_units'] ?? '').toString()) ??
+          items.fold(0, (total, item) => total + item.expectedQty),
+      status: InboundStatus.fromString(metadata['status']?.toString()),
+      items: items,
+      totalSkus: items.length,
+      isOfflinePending: true,
+      localUuid: localUuid,
+      syncError: row['error_message']?.toString(),
+    );
+    return InboundManifestDetail(
+      manifest: manifest,
+      items: items,
+      locations: locations,
     );
   }
 
@@ -529,21 +648,59 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
     required int damagedQty,
     required String targetRack,
     String? damageNote,
+    InboundManifestDetail? snapshot,
   }) async {
     if (!manifestCode.startsWith('LOCAL-')) {
       final serverItemId = int.tryParse(itemId);
       if (serverItemId == null) {
         throw const ServerException('ID item manifes tidak valid.');
       }
-      await _repository.submitPutaway(
-        _tenantSlug,
-        manifestCode: manifestCode,
-        itemId: serverItemId,
-        goodQty: goodQty,
-        damagedQty: damagedQty,
-        targetRack: targetRack,
-        damageNote: damageNote,
+      final localUuid = _offlineManifestId(manifestCode);
+      final row = await OfflineDb.getInboundQueueItem(
+        localUuid: localUuid,
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
       );
+      if (row != null && row['status'] != 'success') {
+        await _saveQueuedManifestProgress(
+          manifestCode: manifestCode,
+          localUuid: localUuid,
+          itemId: itemId,
+          goodQty: goodQty,
+          damagedQty: damagedQty,
+          targetRack: targetRack,
+          damageNote: damageNote,
+          snapshot: snapshot,
+          existingRow: row,
+        );
+        await _trySync(localUuid);
+        return;
+      }
+      try {
+        await _repository.submitPutaway(
+          _tenantSlug,
+          manifestCode: manifestCode,
+          itemId: serverItemId,
+          goodQty: goodQty,
+          damagedQty: damagedQty,
+          targetRack: targetRack,
+          damageNote: damageNote,
+        );
+      } on NetworkException {
+        if (snapshot == null) rethrow;
+        await _saveQueuedManifestProgress(
+          manifestCode: manifestCode,
+          localUuid: localUuid,
+          itemId: itemId,
+          goodQty: goodQty,
+          damagedQty: damagedQty,
+          targetRack: targetRack,
+          damageNote: damageNote,
+          snapshot: snapshot,
+          existingRow: row,
+        );
+        await _trySync(localUuid);
+      }
       return;
     }
 
@@ -615,9 +772,211 @@ class InboundNotifier extends StateNotifier<List<InboundManifest>> {
     );
   }
 
-  Future<void> commitManifestApi(String manifestCode) async {
-    await _repository.commitManifest(_tenantSlug, manifestCode);
-    await loadManifests();
+  Future<bool> commitManifestApi(
+    String manifestCode, {
+    InboundManifestDetail? snapshot,
+  }) async {
+    final localManifest = manifestCode.startsWith('LOCAL-');
+    final localUuid = localManifest
+        ? manifestCode.substring('LOCAL-'.length)
+        : _offlineManifestId(manifestCode);
+    final row = await OfflineDb.getInboundQueueItem(
+      localUuid: localUuid,
+      tenantSlug: _tenantSlug,
+      ownerKey: _ownerKey,
+    );
+    if (row != null && row['status'] != 'success') {
+      final payload = decodeJsonMap(row['payload_json'] as String)
+        ..['should_commit'] = true;
+      await OfflineDb.saveInboundProgress(
+        localUuid: localUuid,
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+        payload: payload,
+        metadata: decodeJsonMap(row['metadata_json'] as String),
+      );
+      final synced = await _trySync(localUuid);
+      await loadManifests();
+      return synced;
+    }
+
+    final serverCode = row?['server_manifest_code']?.toString() ??
+        (localManifest ? null : manifestCode);
+    if (serverCode == null) {
+      throw const NetworkException(
+        'Manifes inbound lokal harus disinkronkan sebelum commit.',
+      );
+    }
+    try {
+      await _repository.commitManifest(_tenantSlug, serverCode);
+      await loadManifests();
+      return true;
+    } on NetworkException {
+      if (snapshot == null) rethrow;
+      final item = snapshot.items.firstOrNull;
+      if (item == null) rethrow;
+      await _saveQueuedManifestProgress(
+        manifestCode: serverCode,
+        localUuid: _offlineManifestId(serverCode),
+        itemId: item.id,
+        goodQty: item.goodQty,
+        damagedQty: item.damagedQty,
+        targetRack: item.targetRack ?? '',
+        damageNote: item.notes,
+        snapshot: snapshot,
+        shouldCommit: true,
+        existingRow:
+            row != null && row['local_uuid'] == _offlineManifestId(serverCode)
+                ? row
+                : null,
+      );
+      final synced = await _trySync(_offlineManifestId(serverCode));
+      await loadManifests();
+      return synced;
+    }
+  }
+
+  Future<void> _saveQueuedManifestProgress({
+    required String manifestCode,
+    required String localUuid,
+    required String itemId,
+    required int goodQty,
+    required int damagedQty,
+    required String targetRack,
+    required InboundManifestDetail? snapshot,
+    required String? damageNote,
+    Map<String, Object?>? existingRow,
+    bool shouldCommit = false,
+  }) async {
+    if (existingRow == null && snapshot == null) {
+      throw const NetworkException(
+        'Detail manifes inbound belum tersedia untuk disimpan offline.',
+      );
+    }
+    final oldPayload = existingRow == null
+        ? <String, dynamic>{}
+        : decodeJsonMap(existingRow['payload_json'] as String);
+    final oldMetadata = existingRow == null
+        ? <String, dynamic>{}
+        : decodeJsonMap(existingRow['metadata_json'] as String);
+    final metadataItems = (oldMetadata['items'] as List? ??
+            snapshot?.items.map(_inboundMetadataItem).toList() ??
+            const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    final payloadItems = (oldPayload['items'] as List? ??
+            snapshot?.items.map(_inboundPayloadItem).toList() ??
+            const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    var index = metadataItems.indexWhere(
+      (item) => item['id']?.toString() == itemId,
+    );
+    if (index < 0 && snapshot != null) {
+      index = snapshot.items.indexWhere((item) => item.id == itemId);
+    }
+    if (index < 0 || index >= payloadItems.length) {
+      throw const ServerException('Item manifes inbound tidak ditemukan.');
+    }
+    payloadItems[index] = {
+      ...payloadItems[index],
+      'good_qty': goodQty,
+      'damaged_qty': damagedQty,
+      'target_rack': targetRack,
+      'damage_note': damageNote,
+    };
+    metadataItems[index] = {
+      ...metadataItems[index],
+      'good_qty': goodQty,
+      'damaged_qty': damagedQty,
+      'target_rack': targetRack,
+      'damage_note': damageNote,
+    };
+    final source = snapshot?.manifest;
+    final payload = <String, dynamic>{
+      ...oldPayload,
+      'manifest_code': manifestCode,
+      'local_uuid': localUuid,
+      'should_commit': shouldCommit || oldPayload['should_commit'] == true,
+      if (source != null) 'supplier_id': source.supplierId,
+      'items': payloadItems,
+    };
+    final metadata = <String, dynamic>{
+      ...oldMetadata,
+      if (source != null) 'supplier_id': source.supplierId,
+      if (source != null) 'supplier_name': source.supplierName,
+      if (source != null) 'status': source.status.label,
+      if (source != null) 'total_units': source.totalUnits,
+      if (snapshot != null)
+        'locations': snapshot.locations
+            .map((location) => {
+                  'id': location.id,
+                  'rack_code': location.rackCode,
+                  'zone': location.zone,
+                  'stock_quantity': location.stockQuantity,
+                })
+            .toList(),
+      'items': metadataItems,
+    };
+    if (existingRow == null) {
+      await OfflineDb.enqueueInbound(
+        localUuid: localUuid,
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+        payload: payload,
+        metadata: metadata,
+      );
+    } else {
+      await OfflineDb.saveInboundProgress(
+        localUuid: localUuid,
+        tenantSlug: _tenantSlug,
+        ownerKey: _ownerKey,
+        payload: payload,
+        metadata: metadata,
+      );
+    }
+  }
+
+  Map<String, dynamic> _inboundPayloadItem(InboundItem item) => {
+        'sku_id': item.productId,
+        'po_qty': item.expectedQty,
+        'good_qty': item.goodQty,
+        'damaged_qty': item.damagedQty,
+        if (item.targetRack != null) 'target_rack': item.targetRack,
+        if (item.notes != null) 'damage_note': item.notes,
+      };
+
+  Map<String, dynamic> _inboundMetadataItem(InboundItem item) => {
+        'id': item.id,
+        'sku_id': item.productId,
+        'sku': item.sku,
+        'barcode': item.barcode,
+        'name': item.name,
+        'po_qty': item.expectedQty,
+        'good_qty': item.goodQty,
+        'damaged_qty': item.damagedQty,
+        if (item.targetRack != null) 'target_rack': item.targetRack,
+        if (item.notes != null) 'damage_note': item.notes,
+      };
+
+  String _offlineManifestId(String manifestCode) =>
+      'INBOUND-MANIFEST-$manifestCode';
+
+  Future<bool> _trySync(String localUuid) async {
+    final syncDio = dio;
+    if (syncDio == null ||
+        authToken.isEmpty ||
+        !await ConnectivityChecker.instance.isOnline()) {
+      return false;
+    }
+    final result = await SyncManager.instance.syncInboundQueue(
+      dio: syncDio,
+      tenantSlug: _tenantSlug,
+      ownerKey: _ownerKey,
+      authToken: authToken,
+      localUuid: localUuid,
+    );
+    return result.syncedCount == 1 && result.failures.isEmpty;
   }
 
   Future<void> holdManifest(String manifestCode, {String? reason}) async {
@@ -640,7 +999,13 @@ final inboundRepositoryProvider =
     userId: authState.userId,
     token: authState.token ?? 'unauthenticated',
   );
-  return InboundNotifier(repository, slug, ownerKey);
+  return InboundNotifier(
+    repository,
+    slug,
+    ownerKey,
+    dio: ref.watch(dioProvider),
+    authToken: authState.token ?? '',
+  );
 });
 
 final inboundStatsProvider = Provider<InboundStats>((ref) {

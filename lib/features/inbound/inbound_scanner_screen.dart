@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'inbound_model.dart';
 import 'inbound_repository.dart';
@@ -217,6 +218,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
             damagedQty: damagedQty,
             targetRack: targetRack,
             damageNote: damageNote,
+            snapshot: _detail,
           );
       await _loadDetail(showLoading: false);
       HapticFeedback.mediumImpact();
@@ -622,15 +624,6 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
   }
 
   Future<void> _commitInbound(InboundManifest manifest) async {
-    if (manifest.isOfflinePending) {
-      OmniSnackbar.show(
-        context,
-        message: 'Sinkronkan manifes terlebih dahulu sebelum commit ke rak.',
-        icon: Icons.cloud_off_rounded,
-      );
-      return;
-    }
-
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -654,14 +647,23 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
 
     setState(() => _isCommitting = true);
     try {
-      await ref
+      final committed = await ref
           .read(inboundRepositoryProvider.notifier)
-          .commitManifestApi(manifest.code);
+          .commitManifestApi(manifest.code, snapshot: _detail);
       if (!mounted) return;
+      final isOnline = ref.read(connectivityStatusProvider);
       OmniSnackbar.show(
         context,
-        message: 'Stok fisik berhasil di-commit ke rak gudang.',
-        icon: Icons.check_circle_rounded,
+        message: committed
+            ? 'Stok fisik berhasil di-commit ke rak gudang.'
+            : isOnline
+            ? 'Commit belum berhasil. Coba lagi.'
+            : 'Tidak ada jaringan. Commit tersimpan di perangkat dan akan dikirim saat jaringan tersedia.',
+        icon: committed
+            ? Icons.check_circle_rounded
+            : isOnline
+            ? Icons.error_outline_rounded
+            : Icons.cloud_upload_outlined,
       );
       context.go('/inbound');
     } catch (error) {
@@ -871,7 +873,6 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
               ),
               ElevatedButton.icon(
                 onPressed: !canEdit ||
-                        manifest.isOfflinePending ||
                         isHeld ||
                         _isCommitting ||
                         _isUpdatingStatus
@@ -894,11 +895,7 @@ class _InboundScannerScreenState extends ConsumerState<InboundScannerScreen> {
                         ),
                       )
                     : const Icon(Icons.done_all_rounded, size: 17),
-                label: Text(
-                  manifest.isOfflinePending
-                      ? 'Sync sebelum Commit'
-                      : 'Commit ke Rak',
-                ),
+                label: const Text('Commit ke Rak'),
               ),
             ],
           ),

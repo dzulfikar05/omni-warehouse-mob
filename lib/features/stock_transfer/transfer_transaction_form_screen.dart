@@ -8,6 +8,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/offline/offline_db.dart';
 import '../../core/offline/offline_identity.dart';
 import '../../core/theme/app_colors.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'transfer_transaction_model.dart';
 import 'transfer_transaction_repository.dart';
@@ -197,16 +198,21 @@ class _TransferTransactionFormScreenState
               localRow['status'] == 'error' ||
               localRow['status'] == 'syncing');
       final syncError = localRow?['error_message']?.toString();
+      final showOfflineWarning = !ref.read(connectivityStatusProvider);
       OmniSnackbar.show(
         context,
         message: localRow?['status'] == 'error'
-            ? 'Mutasi disimpan di perangkat, sinkronisasi gagal: '
+            ? showOfflineWarning
+                  ? 'Mutasi disimpan di perangkat karena tidak ada jaringan: '
                   '${syncError ?? 'silakan coba lagi.'}'
+                  : 'Gagal mengirim mutasi: ${syncError ?? 'silakan coba lagi.'}'
             : isWaitingForSync
-            ? 'Mutasi disimpan lokal dan menunggu sinkronisasi.'
+            ? showOfflineWarning
+                  ? 'Tidak ada jaringan. Mutasi disimpan di perangkat dan akan dikirim saat jaringan tersedia.'
+                  : 'Mutasi masih tersimpan di perangkat.'
             : _isEditing
             ? 'Draft mutasi berhasil diperbarui.'
-            : 'Transaksi mutasi stok berhasil disinkronkan.',
+            : 'Transaksi mutasi stok berhasil dibuat.',
         icon: localRow?['status'] == 'error'
             ? Icons.error_outline_rounded
             : isWaitingForSync

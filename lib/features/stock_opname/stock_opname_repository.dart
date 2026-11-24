@@ -7,7 +7,6 @@ import '../../core/api/api_exception.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/offline/offline_db.dart';
 import '../../core/offline/offline_identity.dart';
-import '../../core/offline/sync_manager.dart';
 import 'stock_opname_local_id.dart';
 import 'stock_opname_model.dart';
 
@@ -46,9 +45,10 @@ abstract class StockOpnameRepository {
 }
 
 class ApiStockOpnameRepository implements StockOpnameRepository {
-  ApiStockOpnameRepository(this._dio);
+  ApiStockOpnameRepository(this._dio, {this.ownerKey});
 
   final Dio _dio;
+  final String? ownerKey;
 
   AppException _mapFailure(DioException error, String fallback) {
     if (error.response?.statusCode == 422 && error.response?.data is Map) {
@@ -109,37 +109,69 @@ class ApiStockOpnameRepository implements StockOpnameRepository {
         ApiEndpoints.opnameList(tenantSlug),
         queryParameters: {'page': page},
       );
-      final envelope = _asMap(
-        response.data,
-        'Format daftar sesi stock opname tidak valid.',
-      );
-      _requireSuccess(envelope, 'Gagal memuat daftar sesi stock opname.');
-      final pagination = _asMap(
-        envelope['data'],
-        'Data daftar sesi stock opname tidak valid.',
-      );
-      final rawSessions = pagination['data'];
-      if (rawSessions is! List) {
-        throw const ServerException(
-          'Format pagination daftar sesi stock opname tidak valid.',
+      final result = _parseSessionPage(response.data, page);
+      if (ownerKey != null) {
+        await OfflineDb.cacheListSnapshot(
+          tenantSlug: tenantSlug,
+          ownerKey: ownerKey!,
+          feature: 'opname',
+          filters: {'page': page},
+          payload: response.data,
         );
       }
-      return StockOpnameSessionPage(
-        sessions: rawSessions
-            .whereType<Map>()
-            .map(
-              (session) => StockOpnameSessionSummary.fromJson(
-                Map<String, dynamic>.from(session),
-              ),
-            )
-            .toList(),
-        currentPage: _asPageNumber(pagination['current_page'], page),
-        lastPage: _asPageNumber(pagination['last_page'], page),
-        total: _asPageNumber(pagination['total'], rawSessions.length),
-      );
+      return result;
     } on DioException catch (error) {
-      throw _mapFailure(error, 'Gagal memuat daftar sesi stock opname.');
+      final failure =
+          _mapFailure(error, 'Gagal memuat daftar sesi stock opname.');
+      if (failure is NetworkException && ownerKey != null) {
+        final cached = await OfflineDb.getCachedListSnapshot(
+          tenantSlug: tenantSlug,
+          ownerKey: ownerKey!,
+          feature: 'opname',
+          filters: {'page': page},
+        );
+        if (cached != null) {
+          return _parseSessionPage(cached, page, isOfflineSnapshot: true);
+        }
+      }
+      throw failure;
     }
+  }
+
+  StockOpnameSessionPage _parseSessionPage(
+    dynamic responseData,
+    int page, {
+    bool isOfflineSnapshot = false,
+  }) {
+    final envelope = _asMap(
+      responseData,
+      'Format daftar sesi stock opname tidak valid.',
+    );
+    _requireSuccess(envelope, 'Gagal memuat daftar sesi stock opname.');
+    final pagination = _asMap(
+      envelope['data'],
+      'Data daftar sesi stock opname tidak valid.',
+    );
+    final rawSessions = pagination['data'];
+    if (rawSessions is! List) {
+      throw const ServerException(
+        'Format pagination daftar sesi stock opname tidak valid.',
+      );
+    }
+    return StockOpnameSessionPage(
+      sessions: rawSessions
+          .whereType<Map>()
+          .map(
+            (session) => StockOpnameSessionSummary.fromJson(
+              Map<String, dynamic>.from(session),
+            ),
+          )
+          .toList(),
+      currentPage: _asPageNumber(pagination['current_page'], page),
+      lastPage: _asPageNumber(pagination['last_page'], page),
+      total: _asPageNumber(pagination['total'], rawSessions.length),
+      isOfflineSnapshot: isOfflineSnapshot,
+    );
   }
 
   @override
@@ -306,7 +338,50 @@ class OfflineStockOpnameRepository implements StockOpnameRepository {
     int page = 1,
   }) async {
     try {
-      return await api.getSessions(tenantSlug, page: page);
+      final result = await api.getSessions(tenantSlug, page: page);
+      if (!result.isOfflineSnapshot || page != 1) return result;
+
+      final cachedSessions = await OfflineDb.getCachedOpnameSessions(
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      );
+      if (cachedSessions.isEmpty) return result;
+      final cachedByCode = <String, StockOpnameSession>{};
+      for (final cached in cachedSessions) {
+        final session = StockOpnameSession.fromJson(cached);
+        cachedByCode[session.sessionCode] = session;
+      }
+      final summaries = <StockOpnameSessionSummary>[];
+      for (final summary in result.sessions) {
+        final cached = cachedByCode[summary.sessionCode];
+        if (cached == null) {
+          summaries.add(summary);
+          continue;
+        }
+        final session = await _applyPending(tenantSlug, cached);
+        summaries.add(
+          StockOpnameSessionSummary(
+            id: summary.id,
+            sessionCode: summary.sessionCode,
+            status: session.status,
+            warehouseName: summary.warehouseName,
+            warehouseCode: summary.warehouseCode,
+            locationId: summary.locationId,
+            locationLabel: summary.locationLabel,
+            auditorName: summary.auditorName,
+            createdAt: summary.createdAt,
+            totalItems: summary.totalItems,
+            countedItems: session.countedItems,
+          ),
+        );
+      }
+      return StockOpnameSessionPage(
+        sessions: summaries,
+        currentPage: result.currentPage,
+        lastPage: result.lastPage,
+        total: result.total,
+        isOfflineSnapshot: true,
+      );
     } on NetworkException {
       if (page != 1) rethrow;
       final cachedSessions = await OfflineDb.getCachedOpnameSessions(
@@ -429,11 +504,26 @@ class OfflineStockOpnameRepository implements StockOpnameRepository {
     final updatedSession = session.copyWith(items: updatedItems);
     await _cacheSession(tenantSlug, updatedSession);
 
-    final outcome = await _enqueueAndSync(
-      tenantSlug,
-      session: updatedSession,
-      items: [_itemPayload(scopedItem, physicalQty)],
-    );
+    late final OpnameSyncOutcome outcome;
+    try {
+      await _flushPendingOpname(tenantSlug, session);
+      outcome = await api.recordCount(
+        tenantSlug,
+        itemId: scopedItem.id,
+        physicalQty: physicalQty,
+        sessionId: session.id > 0 ? session.id : null,
+        sessionCode: session.sessionCode,
+        locationId: scopedItem.locationId,
+        targetRack: scopedItem.targetRack,
+      );
+    } on NetworkException catch (error) {
+      outcome = await _enqueueOffline(
+        tenantSlug,
+        session: updatedSession,
+        items: [_itemPayload(scopedItem, physicalQty)],
+        errorMessage: error.message,
+      );
+    }
     await _cacheSession(
       tenantSlug,
       updatedSession.copyWith(
@@ -478,17 +568,28 @@ class OfflineStockOpnameRepository implements StockOpnameRepository {
       return const OpnameSyncOutcome(synced: true);
     }
 
-    final outcome = await _enqueueAndSync(
-      tenantSlug,
-      session: session,
-      items: session.items
-          .map(
-            (item) =>
-                _itemPayload(_scopedItem(session, item), item.physicalQty!),
-          )
-          .toList(),
-      shouldSubmitReview: true,
-    );
+    late final OpnameSyncOutcome outcome;
+    try {
+      await _flushPendingOpname(tenantSlug, session);
+      outcome = await api.submitReview(
+        tenantSlug,
+        sessionId: session.id > 0 ? session.id : null,
+        sessionCode: session.sessionCode,
+      );
+    } on NetworkException catch (error) {
+      outcome = await _enqueueOffline(
+        tenantSlug,
+        session: session,
+        items: session.items
+            .map(
+              (item) =>
+                  _itemPayload(_scopedItem(session, item), item.physicalQty!),
+            )
+            .toList(),
+        shouldSubmitReview: true,
+        errorMessage: error.message,
+      );
+    }
     await _cacheSession(
       tenantSlug,
       session.copyWith(
@@ -542,6 +643,11 @@ class OfflineStockOpnameRepository implements StockOpnameRepository {
         'Sesi stock opname sudah ditutup, disesuaikan, atau dikirim untuk review.',
       );
     }
+    if (session.isReviewPending) {
+      throw const ServerException(
+        'Sesi sudah menunggu submit review. Kirim ulang review untuk melanjutkan.',
+      );
+    }
   }
 
   StockOpnameItem _scopedItem(
@@ -580,11 +686,59 @@ class OfflineStockOpnameRepository implements StockOpnameRepository {
     }
   }
 
-  Future<OpnameSyncOutcome> _enqueueAndSync(
+  Future<void> _flushPendingOpname(
+    String tenantSlug,
+    StockOpnameSession session,
+  ) async {
+    final rows = await OfflineDb.getPendingOpnameForSession(
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      sessionCode: session.sessionCode,
+    );
+    for (final row in rows) {
+      final payload = decodeJsonMap(row['payload_json'] as String);
+      if (payload['counts_synced'] != true) {
+        for (final rawItem in payload['items'] as List? ?? const []) {
+          final item = Map<String, dynamic>.from(rawItem as Map);
+          final itemId = int.tryParse(item['item_id']?.toString() ?? '');
+          final physicalQty = num.tryParse(
+            item['physical_qty']?.toString() ?? '',
+          );
+          if (itemId == null || physicalQty == null) {
+            throw const ServerException(
+              'Hitungan lokal tidak valid dan tidak dapat dikirim.',
+            );
+          }
+          await api.recordCount(
+            tenantSlug,
+            itemId: itemId,
+            physicalQty: physicalQty,
+            locationId: int.tryParse(item['location_id']?.toString() ?? ''),
+            targetRack: item['target_rack']?.toString(),
+          );
+        }
+      }
+      if (payload['should_submit_review'] == true) {
+        await api.submitReview(
+          tenantSlug,
+          sessionId: int.tryParse(payload['session_id']?.toString() ?? ''),
+          sessionCode: payload['session_code']?.toString(),
+        );
+      }
+      await OfflineDb.deleteOpnameQueueItem(
+        localUuid: row['local_uuid'] as String,
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      );
+    }
+  }
+
+  Future<OpnameSyncOutcome> _enqueueOffline(
     String tenantSlug, {
     required StockOpnameSession session,
     required List<Map<String, dynamic>> items,
     bool shouldSubmitReview = false,
+    required String errorMessage,
   }) async {
     final pendingRows = await OfflineDb.getPendingOpnameForSession(
       tenantSlug: tenantSlug,
@@ -642,37 +796,9 @@ class OfflineStockOpnameRepository implements StockOpnameRepository {
       );
     }
 
-    if (authToken.isEmpty) {
-      return const OpnameSyncOutcome(
-        synced: false,
-        errorMessage:
-            'Sesi login tidak tersedia; sinkronisasi akan dicoba ulang.',
-      );
-    }
-    if (!await SyncManager.instance.shouldSyncAutomatically()) {
-      final automaticSyncEnabled = await OfflineDb.isAutomaticSyncEnabled();
-      return OpnameSyncOutcome(
-        synced: false,
-        errorMessage: automaticSyncEnabled
-            ? 'Hitungan tersimpan lokal dan menunggu koneksi untuk sinkronisasi otomatis.'
-            : 'Hitungan tersimpan lokal dan menunggu sinkronisasi manual.',
-      );
-    }
-    final result = await SyncManager.instance.syncOpnameQueue(
-      dio: dio,
-      tenantSlug: tenantSlug,
-      ownerKey: ownerKey,
-      authToken: authToken,
-      localUuid: localUuid,
-    );
-    if (result.syncedCount == 1 && result.failures.isEmpty) {
-      return const OpnameSyncOutcome(synced: true);
-    }
     return OpnameSyncOutcome(
       synced: false,
-      errorMessage: result.failures.isEmpty
-          ? 'Hitungan tersimpan dan menunggu sinkronisasi.'
-          : result.failures.first.message,
+      errorMessage: errorMessage,
     );
   }
 
@@ -751,7 +877,10 @@ final stockOpnameDataSourceProvider = Provider<StockOpnameRepository>((ref) {
   final auth = ref.watch(authProvider);
   final token = auth.token ?? '';
   return OfflineStockOpnameRepository(
-    api: ApiStockOpnameRepository(dio),
+    api: ApiStockOpnameRepository(
+      dio,
+      ownerKey: offlineOwnerKey(userId: auth.userId, token: token),
+    ),
     dio: dio,
     ownerKey: offlineOwnerKey(userId: auth.userId, token: token),
     authToken: token,
@@ -923,12 +1052,18 @@ class StockOpnameSessionListNotifier
       );
       return;
     }
-    state = const AsyncLoading();
+    final previousPage = state.asData?.value;
+    if (previousPage == null) state = const AsyncLoading();
     loadMoreError = null;
     try {
       state = AsyncData(await _repository.getSessions(slug));
     } catch (error, stackTrace) {
-      state = AsyncError(error, stackTrace);
+      if (previousPage == null) {
+        state = AsyncError(error, stackTrace);
+      } else {
+        loadMoreError = error.toString();
+        state = AsyncData(previousPage);
+      }
     }
   }
 

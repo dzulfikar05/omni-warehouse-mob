@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -41,7 +42,7 @@ class OfflineDb {
     _database = await selectedFactory.openDatabase(
       resolvedPath,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onCreate: (db, version) async {
           await db.execute('''
             CREATE TABLE inbound_offline_queue (
@@ -74,12 +75,14 @@ class OfflineDb {
           await _createTransferTables(db);
           await _createOpnameTables(db);
           await _createSettingsTable(db);
+          await _createListSnapshotTable(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) await _createOutboundTables(db);
           if (oldVersion < 3) await _createTransferTables(db);
           if (oldVersion < 4) await _createOpnameTables(db);
           if (oldVersion < 5) await _createSettingsTable(db);
+          if (oldVersion < 6) await _createListSnapshotTable(db);
         },
       ),
     );
@@ -209,6 +212,22 @@ class OfflineDb {
     ''');
   }
 
+  static Future<void> _createListSnapshotTable(
+    sqflite.DatabaseExecutor db,
+  ) async {
+    await db.execute('''
+      CREATE TABLE api_list_snapshot (
+        tenant_slug TEXT NOT NULL,
+        owner_key TEXT NOT NULL,
+        feature TEXT NOT NULL,
+        query_key TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (tenant_slug, owner_key, feature, query_key)
+      )
+    ''');
+  }
+
   static Future<bool> isAutomaticSyncEnabled() async {
     final rows = await database.query(
       'app_settings',
@@ -243,6 +262,53 @@ class OfflineDb {
   }
 
   static Box<Map> get syncQueueBox => Hive.box<Map>(_syncQueueBoxName);
+
+  static String _listQueryKey(Map<String, dynamic> filters) =>
+      jsonEncode(SplayTreeMap<String, dynamic>.from(filters));
+
+  static Future<void> cacheListSnapshot({
+    required String tenantSlug,
+    required String ownerKey,
+    required String feature,
+    required Map<String, dynamic> filters,
+    required Object? payload,
+  }) async {
+    await database.insert(
+      'api_list_snapshot',
+      {
+        'tenant_slug': tenantSlug,
+        'owner_key': ownerKey,
+        'feature': feature,
+        'query_key': _listQueryKey(filters),
+        'payload_json': jsonEncode(payload),
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<Object?> getCachedListSnapshot({
+    required String tenantSlug,
+    required String ownerKey,
+    required String feature,
+    required Map<String, dynamic> filters,
+  }) async {
+    final rows = await database.query(
+      'api_list_snapshot',
+      columns: ['payload_json'],
+      where:
+          'tenant_slug = ? AND owner_key = ? AND feature = ? AND query_key = ?',
+      whereArgs: [
+        tenantSlug,
+        ownerKey,
+        feature,
+        _listQueryKey(filters),
+      ],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return jsonDecode(rows.single['payload_json'] as String);
+  }
 
   static Future<void> cacheInboundOptions({
     required String tenantSlug,
@@ -360,8 +426,8 @@ class OfflineDb {
         'error_message': null,
       },
       where:
-          'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status IN (?, ?)',
-      whereArgs: [localUuid, tenantSlug, ownerKey, 'pending', 'error'],
+          'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)',
+      whereArgs: [localUuid, tenantSlug, ownerKey, 'pending', 'error', 'success'],
     );
     if (updated != 1) {
       throw StateError(
@@ -529,8 +595,8 @@ class OfflineDb {
         'error_message': null,
       },
       where:
-          'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status IN (?, ?)',
-      whereArgs: [localUuid, tenantSlug, ownerKey, 'pending', 'error'],
+          'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status IN (?, ?, ?)',
+      whereArgs: [localUuid, tenantSlug, ownerKey, 'pending', 'error', 'success'],
     );
     if (updated != 1) {
       throw StateError(
@@ -981,12 +1047,13 @@ class OfflineDb {
     required String localUuid,
     required String tenantSlug,
     required String ownerKey,
-  }) => database.delete(
-    'opname_offline_queue',
-    where:
-        'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status != ?',
-    whereArgs: [localUuid, tenantSlug, ownerKey, 'syncing'],
-  );
+  }) =>
+      database.delete(
+        'opname_offline_queue',
+        where:
+            'local_uuid = ? AND tenant_slug = ? AND owner_key = ? AND status != ?',
+        whereArgs: [localUuid, tenantSlug, ownerKey, 'syncing'],
+      );
 }
 
 String jsonEncodeMap(Map<String, dynamic> value) => jsonEncode(value);

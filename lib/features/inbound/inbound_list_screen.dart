@@ -4,11 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/api/api_exception.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
 import 'inbound_model.dart';
 import 'inbound_repository.dart';
-import 'widgets/create_manifest_modal.dart';
 
 class InboundListScreen extends ConsumerStatefulWidget {
   const InboundListScreen({super.key});
@@ -59,19 +59,11 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
     super.dispose();
   }
 
-  void _showCreateManifestModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => const CreateManifestModal(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final manifests = ref.watch(inboundRepositoryProvider);
     final stats = ref.watch(inboundStatsProvider);
+    final showOfflineWarning = !ref.watch(connectivityStatusProvider);
 
     final filteredManifests = manifests.where((m) {
       final matchesSearch = _searchQuery.isEmpty ||
@@ -101,22 +93,7 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                 const SizedBox(height: 10),
                 _buildFilterChips(),
                 const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _showCreateManifestModal,
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('PO Manifest'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 2),
                 Row(
                   children: [
                     const Expanded(
@@ -163,7 +140,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
                   ...filteredManifests.map(
                     (manifest) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildManifestCard(manifest),
+                      child: _buildManifestCard(
+                        manifest,
+                        showOfflineWarning: showOfflineWarning,
+                      ),
                     ),
                   ),
               ],
@@ -316,7 +296,10 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
     );
   }
 
-  Widget _buildManifestCard(InboundManifest manifest) {
+  Widget _buildManifestCard(
+    InboundManifest manifest, {
+    required bool showOfflineWarning,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -344,7 +327,9 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
               const SizedBox(width: 8),
               _buildStatusBadge(
                 manifest.status,
-                label: manifest.isOfflinePending ? 'PENDING SYNC' : null,
+                label: showOfflineWarning && manifest.isOfflinePending
+                    ? 'PENDING SYNC'
+                    : null,
               ),
             ],
           ),
@@ -386,7 +371,9 @@ class _InboundListScreenState extends ConsumerState<InboundListScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          if (manifest.isOfflinePending && manifest.syncError != null) ...[
+          if (showOfflineWarning &&
+              manifest.isOfflinePending &&
+              manifest.syncError != null) ...[
             Text(
               'Sync tertunda: ${manifest.syncError}',
               style: const TextStyle(

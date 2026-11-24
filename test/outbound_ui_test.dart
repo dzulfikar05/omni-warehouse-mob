@@ -7,7 +7,6 @@ import 'package:omni_warehouse_mob/features/outbound/outbound_list_screen.dart';
 import 'package:omni_warehouse_mob/features/outbound/outbound_model.dart';
 import 'package:omni_warehouse_mob/features/outbound/outbound_repository.dart';
 import 'package:omni_warehouse_mob/features/outbound/outbound_scanner_screen.dart';
-import 'package:omni_warehouse_mob/features/outbound/widgets/create_manifest_modal.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -20,37 +19,7 @@ void main() {
     );
   });
 
-  testWidgets('outbound manifest form fits mobile with keyboard visible', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(320, 640));
-    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
-    addTearDown(() {
-      tester.view.resetViewInsets();
-      tester.binding.setSurfaceSize(null);
-    });
-
-    await tester.pumpWidget(
-      _app(
-        const Scaffold(
-          body: Align(
-            alignment: Alignment.bottomCenter,
-            child: CreateOutboundManifestModal(),
-          ),
-        ),
-      ),
-    );
-    await _flushOfflineIo(tester);
-    await tester.pumpAndSettle();
-
-    expect(tester.takeException(), isNull);
-    expect(find.text('Pilih Customer / Pelanggan'), findsOneWidget);
-    expect(find.text('No. Kendaraan (Opsional)'), findsOneWidget);
-    expect(find.text('Nama Driver (Opsional)'), findsOneWidget);
-    expect(find.textContaining('Barcode: 0034'), findsOneWidget);
-  });
-
-  testWidgets('outbound list opens SO manifest form with customer and SKU', (
+  testWidgets('outbound list does not create manifests on mobile', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(360, 800));
@@ -62,20 +31,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Buat Manifes SO'), findsOneWidget);
-
-    await tester.tap(find.text('Buat Manifes SO').first);
-    await tester.pump();
-    await _flushOfflineIo(tester);
-    await tester.pumpAndSettle();
-
     expect(tester.takeException(), isNull);
-    expect(find.text('Buat Manifes SO Outbound'), findsOneWidget);
-    expect(find.text('Pilih Customer / Pelanggan'), findsOneWidget);
-    expect(find.text('No. Kendaraan (Opsional)'), findsOneWidget);
-    expect(find.text('Nama Driver (Opsional)'), findsOneWidget);
-    expect(find.text('SKU-34'), findsOneWidget);
-    expect(find.text('Jumlah SO'), findsOneWidget);
+    expect(find.text('Buat Manifes SO'), findsNothing);
   });
 
   testWidgets('outbound picking workspace matches inbound mobile layout', (
@@ -103,7 +60,22 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Detail Item Picking & Source Rack'), findsOneWidget);
     expect(find.textContaining('SKU-34'), findsOneWidget);
-    expect(find.text('RACK-B2-01 · 15 unit'), findsOneWidget);
+    expect(find.text('RACK-B2-01 · 15 unit'), findsNothing);
+
+    await tester.tap(find.text('SKU-34').last);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Pilih Gudang'), findsOneWidget);
+    expect(find.text('Pilih Rak Sumber'), findsNothing);
+    await tester.tap(find.byType(DropdownButtonFormField<int>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gudang Utama').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Pilih Rak Sumber'), findsOneWidget);
+    await tester.tap(find.byType(DropdownButtonFormField<OutboundLocation>));
+    await tester.pumpAndSettle();
+    expect(find.text('RACK-B2-01 · 9 unit'), findsOneWidget);
   });
 }
 
@@ -202,7 +174,10 @@ class _FakeOutboundRepository implements OutboundRepository {
         id: 5,
         rackCode: 'RACK-B2-01',
         zone: 'B2',
+        warehouseId: 3,
+        warehouseName: 'Gudang Utama',
         stockQuantity: 15,
+        stockBySku: {34: 9},
       ),
     ],
   );

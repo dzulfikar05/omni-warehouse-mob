@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import 'outbound_model.dart';
 import 'outbound_repository.dart';
-import 'widgets/create_manifest_modal.dart';
 
 class OutboundListScreen extends ConsumerStatefulWidget {
   const OutboundListScreen({super.key});
@@ -50,20 +50,11 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
     }
   }
 
-  void _showCreateManifestModal() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(maxWidth: 480),
-      builder: (context) => const CreateOutboundManifestModal(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final orders = ref.watch(outboundRepositoryProvider);
     final stats = ref.watch(outboundStatsProvider);
+    final showOfflineWarning = !ref.watch(connectivityStatusProvider);
     final query = _searchQuery.toLowerCase();
     final filteredOrders = orders.where((order) {
       final matchesSearch =
@@ -96,22 +87,7 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                 const SizedBox(height: 10),
                 _buildFilterChips(),
                 const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _showCreateManifestModal,
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Buat Manifes SO'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 2),
                 Row(
                   children: [
                     const Expanded(
@@ -153,7 +129,10 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
                   ...filteredOrders.map(
                     (order) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildManifestCard(order),
+                      child: _buildManifestCard(
+                        order,
+                        showOfflineWarning: showOfflineWarning,
+                      ),
                     ),
                   ),
               ],
@@ -320,7 +299,10 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
     );
   }
 
-  Widget _buildManifestCard(OutboundOrder order) => Container(
+  Widget _buildManifestCard(
+    OutboundOrder order, {
+    required bool showOfflineWarning,
+  }) => Container(
     decoration: BoxDecoration(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
@@ -358,7 +340,7 @@ class _OutboundListScreenState extends ConsumerState<OutboundListScreen> {
             color: AppColors.textPrimary,
           ),
         ),
-        if (order.isOfflinePending) ...[
+        if (showOfflineWarning && order.isOfflinePending) ...[
           const SizedBox(height: 4),
           Text(
             order.syncError == null

@@ -12,13 +12,13 @@ import '../../core/offline/offline_identity.dart';
 import '../../core/offline/sync_manager.dart';
 import '../../shared/widgets/omni_app_bar.dart';
 import '../../shared/widgets/omni_snackbar.dart';
+import '../../shared/utils/connectivity_checker.dart';
 import 'dashboard_repository.dart';
 import '../inbound/inbound_repository.dart';
 import '../outbound/outbound_repository.dart';
 import '../stock_opname/stock_opname_repository.dart';
 import 'widgets/dashboard_hero_scan_card.dart';
 import 'widgets/dashboard_kpi_grid.dart';
-import 'widgets/dashboard_shift_strip.dart';
 import 'widgets/dashboard_sync_banner.dart';
 import 'widgets/dashboard_task_section.dart';
 
@@ -143,6 +143,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final dashboardState = ref.watch(dashboardNotifierProvider);
     final summary = dashboardState.summary;
+    final isOffline = !ref.watch(connectivityStatusProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -164,13 +165,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   _buildErrorBanner(dashboardState.errorMessage!),
 
                 // 2. Mesin Offline & Sync Hub (Fitur Unggulan WMS)
-                DashboardSyncBanner(
-                  pendingSyncCount: _offlineQueueCount,
-                  isSyncing: _isSyncing,
-                  hasSynced: _hasSynced,
-                  onSync: _handleSync,
-                ),
-                const Gap(14),
+                if (isOffline && _offlineQueueCount > 0) ...[
+                  DashboardSyncBanner(
+                    pendingSyncCount: _offlineQueueCount,
+                    isSyncing: _isSyncing,
+                    hasSynced: _hasSynced,
+                    onSync: _handleSync,
+                  ),
+                  const Gap(14),
+                ],
 
                 // 3. Hero Card Barcode Scanner
                 const DashboardHeroScanCard(),
@@ -190,8 +193,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
                 const Gap(14),
 
-                // 6. Strip Shift & SLA Performance
-                DashboardShiftStrip(shiftName: summary.shiftName),
               ],
             ),
           ),

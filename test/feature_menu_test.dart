@@ -39,8 +39,8 @@ void main() {
 
     expect(find.text('Fitur Lainnya'), findsOneWidget);
     expect(find.text('Transfer Stok'), findsOneWidget);
-    expect(find.text('Stock Opname'), findsOneWidget);
-    expect(find.text('Sinkronisasi Isar'), findsOneWidget);
+    expect(find.text('Stok Opname'), findsOneWidget);
+    expect(find.text('Sinkronisasi Data'), findsOneWidget);
 
     await tester.tap(find.text('Transfer Stok'));
     await tester.pumpAndSettle();

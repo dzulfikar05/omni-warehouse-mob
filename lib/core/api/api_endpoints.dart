@@ -9,7 +9,7 @@ class ApiEndpoints {
   static const String profile = '/profile';
 
   // DASHBOARD
-  static String dashboardSummary(String slug) => '/$slug/dashboard/summary';
+  static const String dashboardSummary = '/dashboard/summary';
 
   // INBOUND (PENERIMAAN BARANG)
   static String inboundList(String slug) => '/$slug/inbound/';

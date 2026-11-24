@@ -62,6 +62,7 @@ class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
   void _handleConnectivity(bool online) {
     final wasOnline = _wasOnline;
     _wasOnline = online;
+    ref.read(connectivityStatusProvider.notifier).state = online;
     if (online && wasOnline != true) _syncOfflineQueues();
   }
 
@@ -94,7 +95,9 @@ class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
             .read(stockOpnameRepositoryProvider.notifier)
             .loadActiveSession();
       }
-      if (mounted && result.failureCount > 0) {
+      if (mounted &&
+          !ref.read(connectivityStatusProvider) &&
+          result.failureCount > 0) {
         OmniSnackbar.show(
           context,
           message:
@@ -103,7 +106,7 @@ class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
         );
       }
     } on DioException catch (error) {
-      if (mounted) {
+      if (mounted && !ref.read(connectivityStatusProvider)) {
         OmniSnackbar.show(
           context,
           message: error.message ?? 'Sinkronisasi otomatis gagal.',
@@ -111,7 +114,7 @@ class _OmniWarehouseAppState extends ConsumerState<OmniWarehouseApp> {
         );
       }
     } catch (error) {
-      if (mounted) {
+      if (mounted && !ref.read(connectivityStatusProvider)) {
         OmniSnackbar.show(
           context,
           message: 'Sinkronisasi otomatis gagal: $error',

@@ -4,8 +4,10 @@ import 'package:omni_warehouse_mob/core/api/api_exception.dart';
 import 'package:omni_warehouse_mob/core/offline/offline_db.dart';
 import 'package:omni_warehouse_mob/core/offline/sync_manager.dart';
 import 'package:omni_warehouse_mob/features/inbound/inbound_local_id.dart';
+import 'package:omni_warehouse_mob/features/inbound/inbound_model.dart';
 import 'package:omni_warehouse_mob/features/inbound/inbound_repository.dart';
 import 'package:omni_warehouse_mob/features/outbound/outbound_local_id.dart';
+import 'package:omni_warehouse_mob/features/outbound/outbound_model.dart';
 import 'package:omni_warehouse_mob/features/outbound/outbound_repository.dart';
 import 'package:omni_warehouse_mob/features/stock_transfer/transfer_local_id.dart';
 import 'package:omni_warehouse_mob/features/stock_transfer/transfer_transaction_repository.dart';
@@ -328,20 +330,22 @@ void main() {
       physicalQty: 4,
     );
 
-    expect(requestCount, 1);
+    expect(requestCount, 3);
     expect(opnameOutcome.synced, isFalse);
     expect(
       (await OfflineDb.getTransferQueue(
         tenantSlug: tenantSlug,
         ownerKey: ownerKey,
-      )).single['local_uuid'],
+      ))
+          .single['local_uuid'],
       transferId,
     );
     expect(
       (await OfflineDb.getOpnameQueue(
         tenantSlug: tenantSlug,
         ownerKey: ownerKey,
-      )).single['status'],
+      ))
+          .single['status'],
       'pending',
     );
   });
@@ -625,7 +629,8 @@ void main() {
     },
   );
 
-  test('transfer drafts are stored locally with cached master details', () async {
+  test('transfer drafts are stored locally with cached master details',
+      () async {
     const tenantSlug = 'tenant-transfer-local';
     const ownerKey = 'user:transfer-local';
     await OfflineDb.cacheTransferOptions(
@@ -746,6 +751,146 @@ void main() {
       ownerKey: ownerKey,
     );
     expect(cancelledRow?['status'], 'cancelled');
+  });
+
+  test('online transfer creation posts directly even in manual sync mode',
+      () async {
+    const tenantSlug = 'tenant-transfer-online-direct';
+    const ownerKey = 'user:transfer-online-direct';
+    await OfflineDb.cacheTransferOptions(
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      options: {
+        'warehouses': [],
+        'locations': [
+          {'id': 8, 'rack_code': 'RACK-A1'},
+          {'id': 9, 'rack_code': 'RACK-B1'},
+        ],
+        'skus': [
+          {'id': 5, 'sku': 'SKU-5', 'name': 'Produk Lima'},
+        ],
+      },
+    );
+    RequestOptions? request;
+    final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          request = options;
+          handler.resolve(
+            Response<dynamic>(
+              requestOptions: options,
+              data: {
+                'success': true,
+                'data': {'transfer_code': 'TRF-ONLINE-1'},
+              },
+            ),
+          );
+        },
+      ),
+    );
+    final repository = OfflineTransferTransactionRepository(
+      api: ApiTransferTransactionRepository(dio),
+      dio: dio,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
+      operatorName: 'Operator A',
+    );
+
+    final code = await repository.createTransaction(
+      tenantSlug,
+      items: const [
+        {
+          'sku_id': 5,
+          'from_location_id': 8,
+          'to_location_id': 9,
+          'quantity': 2,
+        },
+      ],
+    );
+
+    expect(code, 'TRF-ONLINE-1');
+    expect(request?.path, '/tenant-transfer-online-direct/stock-transfer/store');
+    expect(
+      await OfflineDb.countTransferQueue(
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      ),
+      0,
+    );
+  });
+
+  test('online opname count posts directly even in manual sync mode', () async {
+    const tenantSlug = 'tenant-opname-online-direct';
+    const ownerKey = 'user:opname-online-direct';
+    final requests = <RequestOptions>[];
+    final dio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requests.add(options);
+          final data = options.path.endsWith('/active')
+              ? {
+                  'success': true,
+                  'data': {
+                    'session': {
+                      'id': 44,
+                      'session_code': 'SOP-2026-0044',
+                      'warehouse': 'Gudang Utama',
+                      'status': 'COUNTING',
+                      'location_id': 8,
+                      'location_label': 'Rak A1',
+                    },
+                    'items': [
+                      {
+                        'id': 101,
+                        'sku_id': 5,
+                        'sku': 'SKU-5',
+                        'barcode': '0005',
+                        'name': 'Produk Lima',
+                        'unit': 'pcs',
+                        'location_id': 8,
+                        'target_rack': 'RACK-A1',
+                      },
+                    ],
+                  },
+                }
+              : {'success': true, 'message': 'ok'};
+          handler.resolve(
+            Response<dynamic>(requestOptions: options, data: data),
+          );
+        },
+      ),
+    );
+    final repository = OfflineStockOpnameRepository(
+      api: ApiStockOpnameRepository(dio),
+      dio: dio,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
+      operatorName: 'Operator A',
+    );
+
+    final outcome = await repository.recordCount(
+      tenantSlug,
+      itemId: 101,
+      physicalQty: 4,
+    );
+
+    expect(outcome.synced, isTrue);
+    expect(
+      requests.map((request) => request.path),
+      [
+        '/tenant-opname-online-direct/stock-opname/active',
+        '/tenant-opname-online-direct/stock-opname/record-count',
+      ],
+    );
+    expect(
+      await OfflineDb.countOpnameQueue(
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      ),
+      0,
+    );
   });
 
   test('offline opname counts merge and retry through sync-offline', () async {
@@ -938,6 +1083,16 @@ void main() {
                       ],
                     },
                   },
+                ),
+              );
+              return;
+            }
+            if (options.path.endsWith('/record-count')) {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.connectionError,
+                  error: const NetworkException('offline'),
                 ),
               );
               return;
@@ -1270,6 +1425,219 @@ void main() {
 
     expect(retriedResult.syncedCount, 1);
     expect(retryRequests.single.data['local_uuid'], localUuid);
+  });
+
+  test('existing inbound and outbound scans queue offline and commit on sync',
+      () async {
+    const tenantSlug = 'tenant-existing-manifests';
+    const ownerKey = 'user:existing-manifests';
+    final offlineDio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+    offlineDio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) => handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.connectionError,
+            error: const NetworkException('offline'),
+          ),
+        ),
+      ),
+    );
+    final inboundSnapshot = InboundManifestDetail(
+      manifest: InboundManifest(
+        code: 'INB-OFFLINE-1',
+        supplierId: 3,
+        supplierName: 'Supplier A',
+        totalUnits: 4,
+        status: InboundStatus.receiving,
+        items: [
+          InboundItem(
+            id: '41',
+            productId: 17,
+            sku: 'SKU-17',
+            barcode: '0017',
+            name: 'Product 17',
+            expectedQty: 4,
+          ),
+        ],
+      ),
+      items: [
+        InboundItem(
+          id: '41',
+          productId: 17,
+          sku: 'SKU-17',
+          barcode: '0017',
+          name: 'Product 17',
+          expectedQty: 4,
+        ),
+      ],
+      locations: const [InboundLocation(id: 7, rackCode: 'R-01')],
+    );
+    final inboundNotifier = InboundNotifier(
+      ApiInboundRepository(offlineDio),
+      tenantSlug,
+      ownerKey,
+    );
+    await inboundNotifier.updateItemTally(
+      manifestCode: 'INB-OFFLINE-1',
+      itemId: '41',
+      goodQty: 3,
+      damagedQty: 1,
+      targetRack: 'R-01',
+      snapshot: inboundSnapshot,
+    );
+    final inboundRows = await OfflineDb.getInboundManifests(
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+    );
+    final inboundPayload = decodeJsonMap(
+      inboundRows.single['payload_json'] as String,
+    );
+    expect(inboundPayload['manifest_code'], 'INB-OFFLINE-1');
+    expect(inboundPayload['items'].single['good_qty'], 3);
+    expect(
+      await inboundNotifier.commitManifestApi(
+        'INB-OFFLINE-1',
+        snapshot: inboundSnapshot,
+      ),
+      isFalse,
+    );
+
+    final outboundSnapshot = OutboundManifestDetail(
+      manifest: OutboundOrder(
+        code: 'OUT-OFFLINE-1',
+        customer: 'Customer A',
+        customerId: 12,
+        destination: '',
+        expedition: '',
+        stagingBay: '-',
+        status: OutboundStatus.picking,
+        items: [
+          OutboundItem(
+            id: '52',
+            sku: 'SKU-34',
+            barcode: '0034',
+            name: 'Product 34',
+            fromRack: 'R-02',
+            orderQty: 8,
+            skuId: 34,
+          ),
+        ],
+      ),
+      items: [
+        OutboundItem(
+          id: '52',
+          sku: 'SKU-34',
+          barcode: '0034',
+          name: 'Product 34',
+          fromRack: 'R-02',
+          orderQty: 8,
+          skuId: 34,
+        ),
+      ],
+      locations: const [OutboundLocation(id: 5, rackCode: 'R-02')],
+    );
+    final outboundNotifier = OutboundNotifier(
+      repository: ApiOutboundRepository(offlineDio),
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+    );
+    await outboundNotifier.savePicking(
+      manifestCode: 'OUT-OFFLINE-1',
+      itemId: '52',
+      goodQty: 6,
+      damagedQty: 1,
+      sourceRackId: 5,
+      sourceRack: 'R-02',
+      snapshot: outboundSnapshot,
+    );
+    final outboundRows = await OfflineDb.getOutboundManifests(
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+    );
+    final outboundPayload = decodeJsonMap(
+      outboundRows.single['payload_json'] as String,
+    );
+    expect(outboundPayload['manifest_code'], 'OUT-OFFLINE-1');
+    expect(outboundPayload['items'].single['good_qty'], 6);
+    expect(
+      await outboundNotifier.commitOutboundApi(
+        'OUT-OFFLINE-1',
+        snapshot: outboundSnapshot,
+      ),
+      isFalse,
+    );
+
+    final syncRequests = <RequestOptions>[];
+    final syncDio = Dio(BaseOptions(baseUrl: 'https://wms.test/api'));
+    syncDio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          syncRequests.add(options);
+          handler.resolve(
+            Response<dynamic>(
+              requestOptions: options,
+              data: {
+                'success': true,
+                'data': {'manifest_code': options.data['manifest_code']},
+              },
+            ),
+          );
+        },
+      ),
+    );
+    final inboundSync = await SyncManager.instance.syncInboundQueue(
+      dio: syncDio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
+    );
+    final outboundSync = await SyncManager.instance.syncOutboundQueue(
+      dio: syncDio,
+      tenantSlug: tenantSlug,
+      ownerKey: ownerKey,
+      authToken: 'test-token',
+    );
+
+    expect(inboundSync.syncedCount, 1);
+    expect(outboundSync.syncedCount, 1);
+    expect(syncRequests, hasLength(2));
+    expect(syncRequests[0].data['should_commit'], isTrue);
+    expect(syncRequests[1].data['should_commit'], isTrue);
+
+    await inboundNotifier.updateItemTally(
+      manifestCode: 'INB-OFFLINE-1',
+      itemId: '41',
+      goodQty: 2,
+      damagedQty: 2,
+      targetRack: 'R-01',
+      snapshot: inboundSnapshot,
+    );
+    await outboundNotifier.savePicking(
+      manifestCode: 'OUT-OFFLINE-1',
+      itemId: '52',
+      goodQty: 5,
+      damagedQty: 2,
+      sourceRackId: 5,
+      sourceRack: 'R-02',
+      snapshot: outboundSnapshot,
+    );
+    expect(
+      (await OfflineDb.getInboundManifests(
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      ))
+          .single['status'],
+      'pending',
+    );
+    expect(
+      (await OfflineDb.getOutboundManifests(
+        tenantSlug: tenantSlug,
+        ownerKey: ownerKey,
+      ))
+          .single['status'],
+      'pending',
+    );
   });
 
   test('outbound sync posts stable local IDs and is owner scoped', () async {

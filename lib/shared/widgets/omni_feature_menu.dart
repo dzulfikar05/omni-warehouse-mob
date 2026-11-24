@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
-import 'omni_status_badge.dart';
 
 Future<void> showOmniFeatureMenu(
   BuildContext context, {
@@ -125,24 +124,6 @@ class _FeatureMenuSheet extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppColors.primaryBorder),
-                  ),
-                  child: const Text(
-                    'WH-90241',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'RobotoMono',
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -179,13 +160,9 @@ class _FeatureMenuSheet extends ConsumerWidget {
             iconColor: AppColors.success,
             iconBg: AppColors.successLight,
             iconBorder: AppColors.successBorder,
-            title: 'Stock Opname',
+            title: 'Stok Opname',
             subtitle: 'Audit siklus & hitung fisik per rak',
             route: '/more/opname',
-            badge: const OmniStatusBadge(
-              label: '1 AKTIF',
-              variant: OmniBadgeVariant.success,
-            ),
           ),
           const SizedBox(height: 16),
 
@@ -208,13 +185,9 @@ class _FeatureMenuSheet extends ConsumerWidget {
             iconColor: AppColors.primary,
             iconBg: AppColors.primaryLight,
             iconBorder: AppColors.primaryBorder,
-            title: 'Sinkronisasi Isar',
+            title: 'Sinkronisasi Data',
             subtitle: 'Status antrean transaksi offline lokal',
             route: '/more/sync',
-            badge: const OmniStatusBadge(
-              label: '3 PENDING',
-              variant: OmniBadgeVariant.warning,
-            ),
           ),
           const SizedBox(height: 8),
 

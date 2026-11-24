@@ -22,7 +22,7 @@ class DashboardKpiGrid extends StatelessWidget {
           children: [
             Expanded(
               child: _KpiCard(
-                title: 'PO IN',
+                title: 'INBOUND AKTIF',
                 value: kpi.activeInboundCount.toString(),
                 subtext: 'Barang Masuk',
                 icon: LucideIcons.arrowDownToLine,
@@ -33,9 +33,9 @@ class DashboardKpiGrid extends StatelessWidget {
             const Gap(8),
             Expanded(
               child: _KpiCard(
-                title: 'SO OUT',
+                title: 'OUTBOUND AKTIF',
                 value: kpi.activeOutboundCount.toString(),
-                subtext: 'Siap Pick & Kirim',
+                subtext: 'Barang Keluar',
                 icon: LucideIcons.arrowUpFromLine,
                 color: AppColors.primary,
                 onTap: () => context.go('/outbound'),
@@ -48,9 +48,9 @@ class DashboardKpiGrid extends StatelessWidget {
           children: [
             Expanded(
               child: _KpiCard(
-                title: 'MUTASI RAK',
+                title: 'TRANSFER STOK',
                 value: kpi.pendingTransferCount.toString(),
-                subtext: 'Transfer Lokasi',
+                subtext: 'Menunggu Proses',
                 icon: LucideIcons.arrowLeftRight,
                 color: const Color(0xFF6366F1),
                 onTap: () => context.push('/more/transfer'),
@@ -59,9 +59,9 @@ class DashboardKpiGrid extends StatelessWidget {
             const Gap(8),
             Expanded(
               child: _KpiCard(
-                title: 'STOK OPNAME',
+                title: 'OPNAME AKTIF',
                 value: kpi.activeOpnameCount.toString(),
-                subtext: 'Audit Siklus Fisik',
+                subtext: 'Hitung Fisik',
                 icon: LucideIcons.clipboardCheck,
                 color: AppColors.success,
                 onTap: () => context.push('/more/opname'),

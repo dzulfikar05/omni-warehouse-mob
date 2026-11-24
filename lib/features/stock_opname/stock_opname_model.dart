@@ -83,7 +83,10 @@ class StockOpnameItem {
           (json['target_rack'] ??
                   json['rack_code'] ??
                   rackMap?['rack_code'] ??
+                  rackMap?['code'] ??
                   rackMap?['name'] ??
+                  locationMap?['rack_code'] ??
+                  locationMap?['code'] ??
                   '')
               .toString(),
       locationLabel: (json['location_label'] ?? locationMap?['name'] ?? '')
@@ -274,12 +277,14 @@ class StockOpnameSessionPage {
     required this.currentPage,
     required this.lastPage,
     required this.total,
+    this.isOfflineSnapshot = false,
   });
 
   final List<StockOpnameSessionSummary> sessions;
   final int currentPage;
   final int lastPage;
   final int total;
+  final bool isOfflineSnapshot;
 
   bool get hasMore => currentPage < lastPage;
 }

@@ -44,7 +44,6 @@ class MockDashboardRepository implements DashboardRepository {
       offlineQueueCount: 3,
     ),
     isOnline: true,
-    shiftName: 'Shift 1 (Pagi) • 08:00 - 16:00',
     pendingSyncCount: 3,
     tasks: [
       DashboardTaskItem(
@@ -110,21 +109,25 @@ class MockDashboardRepository implements DashboardRepository {
 
 class ApiDashboardRepository implements DashboardRepository {
   final Dio _dio;
-  final String tenantSlug;
 
-  ApiDashboardRepository(this._dio, {this.tenantSlug = ''});
+  ApiDashboardRepository(this._dio);
 
   @override
   DashboardSummary getInitialSummary() => const DashboardSummary();
 
   @override
   Future<DashboardSummary> getSummary() async {
-    final response = await _dio.get(ApiEndpoints.dashboardSummary(tenantSlug));
+    final response = await _dio.get(ApiEndpoints.dashboardSummary);
     final data = response.data;
-    final itemMap = (data is Map && data['data'] is Map)
-        ? data['data'] as Map
-        : (data is Map ? data : null);
-    if (itemMap == null) return const DashboardSummary();
+    if (data is! Map || data['data'] is! Map) {
+      throw const FormatException('Format respons dashboard tidak valid.');
+    }
+    if (data['status'] != 'success') {
+      throw Exception(
+        data['message']?.toString() ?? 'Gagal memuat ringkasan dashboard.',
+      );
+    }
+    final itemMap = data['data'] as Map;
     return DashboardSummary.fromJson(Map<String, dynamic>.from(itemMap));
   }
 }

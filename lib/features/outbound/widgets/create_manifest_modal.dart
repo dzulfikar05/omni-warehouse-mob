@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/api/api_client.dart';
-import '../../../core/auth/auth_provider.dart';
-import '../../../core/offline/offline_identity.dart';
-import '../../../core/offline/sync_manager.dart';
+import '../../../core/api/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/omni_snackbar.dart';
 import '../outbound_local_id.dart';
@@ -127,12 +124,6 @@ class _CreateOutboundManifestModalState
 
     setState(() => _isSubmitting = true);
     try {
-      final auth = ref.read(authProvider);
-      final tenantSlug = auth.tenantSlug ?? auth.tenantName ?? 'demo-tenant';
-      final ownerKey = offlineOwnerKey(
-        userId: auth.userId,
-        token: auth.token ?? 'unauthenticated',
-      );
       final offlineItems = payload
           .map(
             (item) => <String, dynamic>{
@@ -156,63 +147,50 @@ class _CreateOutboundManifestModalState
           'unit': item.product.unit,
         };
       });
-      await ref
-          .read(outboundRepositoryProvider.notifier)
-          .queueOfflineManifest(
-            localUuid: _localUuid,
-            payload: {
-              'manifest_code': _localUuid,
-              'local_uuid': _localUuid,
-              'transaction_uuid': _localUuid,
-              'customer_id': customer.id,
-              'vehicle_no': _vehicleController.text.trim(),
-              'driver_name': _driverController.text.trim(),
-              'notes': _notesController.text.trim(),
-              'should_commit': false,
-              'items': offlineItems,
-            },
-            metadata: {
-              'customer_id': customer.id,
-              'customer_name': customer.name,
-              'items': metadataItems,
-            },
-          );
-      final result = await SyncManager.instance.shouldSyncAutomatically()
-          ? await SyncManager.instance.syncOutboundQueue(
-              dio: ref.read(dioProvider),
-              tenantSlug: tenantSlug,
-              ownerKey: ownerKey,
-              authToken: auth.token ?? '',
-              localUuid: _localUuid,
-            )
-          : null;
-      String? refreshError;
+      var savedOffline = false;
       try {
-        await ref.read(outboundRepositoryProvider.notifier).loadManifests();
-      } catch (error) {
-        refreshError = error.toString();
+        await ref.read(outboundRepositoryProvider.notifier).createManifest(
+              customerId: customer.id,
+              items: payload,
+              vehicleNo: _vehicleController.text.trim(),
+              driverName: _driverController.text.trim(),
+              notes: _notesController.text.trim(),
+            );
+      } on NetworkException {
+        await ref
+            .read(outboundRepositoryProvider.notifier)
+            .queueOfflineManifest(
+              localUuid: _localUuid,
+              payload: {
+                'manifest_code': _localUuid,
+                'local_uuid': _localUuid,
+                'transaction_uuid': _localUuid,
+                'customer_id': customer.id,
+                'vehicle_no': _vehicleController.text.trim(),
+                'driver_name': _driverController.text.trim(),
+                'notes': _notesController.text.trim(),
+                'should_commit': false,
+                'items': offlineItems,
+              },
+              metadata: {
+                'customer_id': customer.id,
+                'customer_name': customer.name,
+                'items': metadataItems,
+              },
+            );
+        savedOffline = true;
       }
+      await ref.read(outboundRepositoryProvider.notifier).loadManifests();
       if (!mounted) return;
       Navigator.of(context).pop();
-      final synced = result != null &&
-          result.syncedCount == 1 &&
-          result.failures.isEmpty;
       OmniSnackbar.show(
         context,
-        message: synced
-            ? refreshError == null
-                  ? 'Manifes SO outbound berhasil dibuat.'
-                  : 'Manifes berhasil disinkronkan, tetapi daftar gagal dimuat: $refreshError'
-            : result == null
-            ? refreshError == null
-                ? 'Manifes $_localUuid tersimpan lokal dan menunggu sinkronisasi manual.'
-                : 'Manifes tersimpan lokal; daftar gagal dimuat: $refreshError'
-            : result.failures.isNotEmpty
-            ? 'Manifes $_localUuid tersimpan lokal; sync gagal: ${result.failures.first.message}'
-            : 'Manifes $_localUuid tersimpan lokal dan menunggu sinkronisasi.',
-        icon: synced
-            ? Icons.check_circle_rounded
-            : Icons.cloud_off_rounded,
+        message: savedOffline
+            ? 'Tidak ada jaringan. Manifes outbound disimpan di perangkat dan akan dikirim saat jaringan tersedia.'
+            : 'Manifes SO outbound berhasil dibuat.',
+        icon: savedOffline
+            ? Icons.cloud_off_rounded
+            : Icons.check_circle_rounded,
       );
     } catch (error) {
       if (mounted) {

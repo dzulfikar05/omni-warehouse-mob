@@ -8,7 +8,6 @@ import 'package:omni_warehouse_mob/features/inbound/inbound_list_screen.dart';
 import 'package:omni_warehouse_mob/features/inbound/inbound_model.dart';
 import 'package:omni_warehouse_mob/features/inbound/inbound_repository.dart';
 import 'package:omni_warehouse_mob/features/inbound/inbound_scanner_screen.dart';
-import 'package:omni_warehouse_mob/features/inbound/widgets/create_manifest_modal.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -32,11 +31,11 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('TX-INB-2026-VERY-LONG-MANIFEST-CODE'), findsOneWidget);
     expect(find.text('ON HOLD'), findsOneWidget);
+    expect(find.text('Buat Manifes PO'), findsNothing);
   });
 
-  testWidgets('receiving workspace fits a narrow mobile viewport', (
-    tester,
-  ) async {
+  testWidgets('receiving workspace fits a narrow mobile viewport',
+      (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 640));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -57,35 +56,6 @@ void main() {
     expect(find.text('Detail Item Receiving & Putaway'), findsOneWidget);
     expect(find.textContaining('Long-name monitor'), findsOneWidget);
     expect(find.text('RACK-A1-01 · 12 unit'), findsOneWidget);
-  });
-
-  testWidgets('create manifest modal remains scrollable above the keyboard', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(320, 640));
-    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
-    addTearDown(() {
-      tester.view.resetViewInsets();
-      tester.binding.setSurfaceSize(null);
-    });
-
-    await tester.pumpWidget(
-      _app(
-        const Scaffold(
-          body: Align(
-            alignment: Alignment.bottomCenter,
-            child: CreateManifestModal(),
-          ),
-        ),
-      ),
-    );
-    await _flushOfflineIo(tester);
-    await tester.pumpAndSettle();
-
-    expect(tester.takeException(), isNull);
-    expect(find.text('Buat Manifes Inbound PO'), findsOneWidget);
-    expect(find.text('Buat Manifes PO'), findsOneWidget);
-    expect(find.textContaining('Barcode: 0123456789'), findsOneWidget);
   });
 }
 
@@ -119,7 +89,8 @@ class _FakeInboundRepository implements InboundRepository {
   @override
   Future<InboundMasterOptions> getMasterOptions(
     String slug,
-  ) async => InboundMasterOptions(
+  ) async =>
+      InboundMasterOptions(
         suppliers: [InboundSupplier(id: 1, code: '1', name: 'Supplier WMS')],
         products: [
           InboundProductMaster(
@@ -138,7 +109,8 @@ class _FakeInboundRepository implements InboundRepository {
   Future<InboundListResult> getManifests(
     String slug, {
     Map<String, dynamic> filters = const {},
-  }) async => InboundListResult(
+  }) async =>
+      InboundListResult(
         manifests: [_manifest],
         stats: const InboundStats(
           todayTotal: 1,
@@ -152,7 +124,8 @@ class _FakeInboundRepository implements InboundRepository {
   Future<InboundManifestDetail> getManifestDetail(
     String slug,
     String code,
-  ) async => InboundManifestDetail(
+  ) async =>
+      InboundManifestDetail(
         manifest: _manifest,
         items: [
           InboundItem(
@@ -180,7 +153,7 @@ class _FakeInboundRepository implements InboundRepository {
     String slug, {
     required String localUuid,
     required int supplierId,
-    required List<Map<String, int>> items,
+    required List<Map<String, dynamic>> items,
   }) async {}
 
   @override

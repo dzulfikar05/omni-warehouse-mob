@@ -120,6 +120,9 @@ void main() {
                   'id': 5,
                   'rack_code': 'RACK-B2-01',
                   'zone': 'B2',
+                  'warehouse_id': 3,
+                  'warehouse_name': 'Gudang Utama',
+                  'stock_by_sku': {'34': 7},
                   'available_quantity': 15,
                 },
               ],
@@ -141,6 +144,9 @@ void main() {
         expect(result.manifest.totalProcessedUnits, 3);
         expect(result.locations.single.zone, 'B2');
         expect(result.locations.single.stockQuantity, 15);
+        expect(result.locations.single.warehouseId, 3);
+        expect(result.locations.single.warehouseName, 'Gudang Utama');
+        expect(result.locations.single.stockBySku, {34: 7});
       },
     );
 
